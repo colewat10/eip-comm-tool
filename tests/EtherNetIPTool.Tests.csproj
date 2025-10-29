@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\EtherNetIPTool\EtherNetIPTool.csproj" />
+    <ProjectReference Include="..\src\EtherNetIPTool.csproj" />
   </ItemGroup>
 
 </Project>
