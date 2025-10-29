@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using EtherNetIPTool.Core.CIP;
 using EtherNetIPTool.Core.Network;
 using EtherNetIPTool.Models;
@@ -167,45 +169,52 @@ public class DeviceDiscoveryService : IDisposable
         }
     }
 
+    // P/Invoke for Windows SendARP API
+    [DllImport("iphlpapi.dll", ExactSpelling = true)]
+    private static extern int SendARP(uint destIp, uint srcIp, byte[] macAddr, ref int physAddrLen);
+
     /// <summary>
     /// Perform ARP table lookup to get MAC address for IP address
+    /// Uses Windows SendARP API for reliable ARP resolution
     /// (REQ-3.3.1-004, REQ-4.3.2)
     /// </summary>
     private async Task<PhysicalAddress> GetMacAddressAsync(IPAddress ipAddress)
     {
         try
         {
-            // Try to get MAC from ARP table
-            var arpEntries = IPGlobalProperties.GetIPGlobalProperties()
-                .GetIPNeighborInformation();
-
-            var entry = arpEntries.FirstOrDefault(e => e.Address.Equals(ipAddress));
-
-            if (entry != null && !entry.PhysicalAddress.Equals(PhysicalAddress.None))
-            {
-                return entry.PhysicalAddress;
-            }
-
-            // If not found, send ping to populate ARP cache (REQ-4.3.2)
+            // First, send ping to ensure device is in ARP cache (REQ-4.3.2)
             using var ping = new Ping();
-            await ping.SendPingAsync(ipAddress, 1000);
+            var pingReply = await ping.SendPingAsync(ipAddress, 1000);
 
-            // Wait a moment for ARP cache to update
-            await Task.Delay(100);
+            // Wait briefly for ARP cache to update
+            await Task.Delay(50);
 
-            // Try again
-            arpEntries = IPGlobalProperties.GetIPGlobalProperties()
-                .GetIPNeighborInformation();
-
-            entry = arpEntries.FirstOrDefault(e => e.Address.Equals(ipAddress));
-
-            if (entry != null)
+            // Convert IP address to uint (network byte order)
+            var ipBytes = ipAddress.GetAddressBytes();
+            if (ipBytes.Length != 4)
             {
-                return entry.PhysicalAddress;
+                _logger.LogWarning($"Invalid IP address format: {ipAddress}");
+                return PhysicalAddress.None;
             }
 
-            _logger.LogWarning($"Could not resolve MAC address for {ipAddress}");
-            return PhysicalAddress.None;
+            uint destIp = BitConverter.ToUInt32(ipBytes, 0);
+
+            // Call SendARP to get MAC address
+            byte[] macAddr = new byte[6];
+            int macAddrLen = macAddr.Length;
+
+            int result = SendARP(destIp, 0, macAddr, ref macAddrLen);
+
+            if (result == 0 && macAddrLen == 6)
+            {
+                // Successfully retrieved MAC address
+                return new PhysicalAddress(macAddr);
+            }
+            else
+            {
+                _logger.LogWarning($"SendARP failed for {ipAddress} with result code: {result}");
+                return PhysicalAddress.None;
+            }
         }
         catch (Exception ex)
         {
