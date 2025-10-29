@@ -9,6 +9,7 @@ This is a professional industrial automation tool for commissioning EtherNet/IP 
 - SICK (Industrial sensors with EtherNet/IP)
 - Banner (Industrial sensors and indicators)
 - Pepperl+Fuchs (IO-Link masters, field devices)
+- Turck (TBIP series IO-Link Masters, field devices)
 - Any device supporting EtherNet/IP and CIP TCP/IP Interface Object (Class 0xF5)
 
 ## Features
@@ -57,8 +58,11 @@ eip-comm-tool/
 │       └── Resources/             # Icons, help files, styles
 ├── tests/
 │   └── EtherNetIPTool.Tests/     # Unit tests
+├── scripts/
+│   └── Configure-FirewallForEtherNetIP.ps1  # Windows Firewall setup
 ├── docs/
 │   ├── PRD.md                     # Product Requirements Document
+│   ├── TROUBLESHOOTING.md         # Troubleshooting guide
 │   └── ARCHITECTURE_PHASE1.md    # Phase 1 Architecture Documentation
 ├── agents/                        # AI agent profiles
 └── EtherNetIPTool.sln            # Visual Studio solution
@@ -99,9 +103,32 @@ dotnet test
 dotnet test /p:CollectCoverage=true
 ```
 
+### First-Time Setup: Configure Windows Firewall
+
+**IMPORTANT:** EtherNet/IP discovery requires UDP port 44818 to be open in Windows Firewall.
+
+Run the included PowerShell script as Administrator:
+
+```powershell
+# Navigate to scripts folder
+cd scripts
+
+# Run firewall configuration script
+.\Configure-FirewallForEtherNetIP.ps1
+```
+
+This creates firewall rules to allow:
+- Inbound UDP port 44818 (receive device responses)
+- Outbound UDP port 44818 (send broadcasts)
+
+Without these rules, **no devices will be discovered**.
+
+See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for detailed troubleshooting steps.
+
 ## Documentation
 
 - **[Product Requirements Document (PRD)](docs/PRD.md)**: Complete functional and technical specifications
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)**: Device discovery troubleshooting and diagnostics
 - **[Phase 1 Architecture Documentation](docs/ARCHITECTURE_PHASE1.md)**: Detailed architecture and implementation guide
 - **[Agent Profiles](agents/)**: AI development agent specifications
 
@@ -165,5 +192,5 @@ See [LICENSE](LICENSE) file for details.
 ---
 
 **Version**: 1.0.0-alpha
-**Status**: Phase 1 Complete - Core Infrastructure
+**Status**: Phase 2 Complete - EtherNet/IP Discovery
 **Last Updated**: 2025-10-29

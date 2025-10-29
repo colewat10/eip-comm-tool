@@ -11,6 +11,7 @@ The tool discovers devices that support **EtherNet/IP (CIP over Ethernet)** prot
 - Allen-Bradley Stratix managed switches
 - Allen-Bradley PowerFlex drives with EtherNet/IP
 - Allen-Bradley POINT I/O adapters (1734-AENT, etc.)
+- Turck IO-Link Masters (TBIP series) and field devices
 - SICK industrial sensors with EtherNet/IP
 - Banner Engineering sensors/indicators with EtherNet/IP
 - Pepperl+Fuchs field devices with EtherNet/IP
@@ -25,22 +26,40 @@ The tool discovers devices that support **EtherNet/IP (CIP over Ethernet)** prot
 
 ### Common Issues and Solutions
 
-#### 1. Windows Firewall Blocking UDP Port 44818
+#### 1. Windows Firewall Blocking UDP Port 44818 ⚠️ MOST COMMON ISSUE
 
 **Symptom:** No responses received, log shows "Sent List Identity broadcast to 255.255.255.255:44818" but 0 responses.
 
-**Solution:**
+**Solution - Automatic (Recommended):**
+
+Run the included PowerShell script as Administrator:
+
+```powershell
+# Navigate to the scripts folder
+cd scripts
+
+# Run the firewall configuration script
+.\Configure-FirewallForEtherNetIP.ps1
+```
+
+This script will:
+- Create inbound rule for UDP port 44818 (receive device responses)
+- Create outbound rule for UDP port 44818 (send broadcasts)
+- Verify the rules were created successfully
+
+**Solution - Manual:**
 ```powershell
 # Run PowerShell as Administrator
 # Allow inbound UDP port 44818
-New-NetFirewallRule -DisplayName "EtherNet/IP Discovery" -Direction Inbound -Protocol UDP -LocalPort 44818 -Action Allow
+New-NetFirewallRule -DisplayName "EtherNet/IP Discovery - Inbound" -Direction Inbound -Protocol UDP -LocalPort 44818 -Action Allow
 
 # Allow outbound UDP broadcasts
-New-NetFirewallRule -DisplayName "EtherNet/IP Broadcast" -Direction Outbound -Protocol UDP -RemotePort 44818 -Action Allow
+New-NetFirewallRule -DisplayName "EtherNet/IP Discovery - Outbound" -Direction Outbound -Protocol UDP -RemotePort 44818 -Action Allow
 ```
 
-**Alternative:** Temporarily disable Windows Firewall to test:
+**Alternative for Testing:** Temporarily disable Windows Firewall to test:
 - Settings → Windows Security → Firewall & network protection → Turn off
+- **Important:** Re-enable after testing!
 
 #### 2. Wrong Network Adapter Selected
 
@@ -168,6 +187,12 @@ Data: 24 bytes (CIP List Identity request)
 - Verify EtherNet/IP mode is selected (not PROFINET)
 - Check DIP switches or web interface
 
+**Turck:**
+- TBIP series IO-Link Masters should respond by default
+- Ensure device has valid IP address (not 0.0.0.0)
+- Some Turck devices may send responses specifically to port 44818
+- Check log for "Successfully bound to port 44818" message
+
 ## Understanding the Discovery Process
 
 ### What Happens During Scan
@@ -184,8 +209,9 @@ Data: 24 bytes (CIP List Identity request)
 
 2. **Send Broadcast**
    - Destination: 255.255.255.255:44818
-   - Source: Selected adapter IP:ephemeral port
+   - Source: Selected adapter IP:44818 (or ephemeral port if 44818 in use)
    - Protocol: UDP
+   - Note: Application attempts to bind to port 44818 for compatibility with devices that send responses there
 
 3. **Wait for Responses** (3 seconds)
    - Devices respond with their identity

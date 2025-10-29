@@ -68,7 +68,19 @@ public class DeviceDiscoveryService : IDisposable
             {
                 _socket = new EtherNetIPSocket(_networkAdapter.IPAddress!);
                 _socket.Open();
-                _logger.LogInfo($"Opened UDP socket on {_networkAdapter.IPAddress}:44818");
+
+                // Log socket binding details for diagnostics
+                var boundPort = _socket.LocalPort;
+                _logger.LogInfo($"Opened UDP socket on {_networkAdapter.IPAddress}:{boundPort}");
+
+                if (boundPort == 44818)
+                {
+                    _logger.LogInfo("Successfully bound to port 44818 (optimal for device discovery)");
+                }
+                else
+                {
+                    _logger.LogWarning($"Bound to ephemeral port {boundPort} (port 44818 in use). Some devices may not respond.");
+                }
             }
 
             // Build List Identity request packet (REQ-3.3.1-001, REQ-3.3.1-002)

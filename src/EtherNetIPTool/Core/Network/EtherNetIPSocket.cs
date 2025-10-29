@@ -25,6 +25,11 @@ public class EtherNetIPSocket : IDisposable
     public const int DefaultDiscoveryTimeout = 3000;
 
     /// <summary>
+    /// Get the local port the socket is bound to (0 if not open)
+    /// </summary>
+    public int LocalPort => (_udpClient?.Client?.LocalEndPoint as IPEndPoint)?.Port ?? 0;
+
+    /// <summary>
     /// Create a new EtherNet/IP socket bound to specific network adapter
     /// </summary>
     /// <param name="localIP">Local IP address to bind to</param>
@@ -35,6 +40,8 @@ public class EtherNetIPSocket : IDisposable
 
     /// <summary>
     /// Open the UDP socket for broadcast communication
+    /// Attempts to bind to port 44818 first (some devices send responses there),
+    /// falls back to ephemeral port if 44818 is unavailable
     /// </summary>
     /// <exception cref="SocketException">If socket cannot be created or bound</exception>
     public void Open()
@@ -42,9 +49,33 @@ public class EtherNetIPSocket : IDisposable
         if (_udpClient != null)
             return; // Already open
 
+        // Try to bind to port 44818 first - some EtherNet/IP devices (Turck, etc.)
+        // send responses specifically to port 44818 rather than the source port
         try
         {
-            // Create UDP client bound to local IP (REQ-4.3.3)
+            var localEndPoint = new IPEndPoint(_localIP, EtherNetIPPort);
+            _udpClient = new UdpClient(localEndPoint)
+            {
+                EnableBroadcast = true,
+                Client =
+                {
+                    ReceiveTimeout = DefaultDiscoveryTimeout,
+                    SendTimeout = 5000
+                }
+            };
+
+            // Successfully bound to port 44818
+            return;
+        }
+        catch (SocketException)
+        {
+            // Port 44818 in use, try ephemeral port
+            _udpClient = null;
+        }
+
+        // Fallback: Use ephemeral port (standard approach)
+        try
+        {
             var localEndPoint = new IPEndPoint(_localIP, 0); // Use ephemeral port
             _udpClient = new UdpClient(localEndPoint)
             {
