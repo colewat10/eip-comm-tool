@@ -491,9 +491,80 @@ public class MainWindowViewModel : ViewModelBase
         if (SelectedDevice == null)
             return;
 
-        _activityLogger.LogInfo($"Opening configuration dialog for device: {SelectedDevice.MacAddressString}");
-        // TODO: Open configuration dialog (Phase 4)
-        StatusText = "Device configuration dialog (coming in Phase 4)";
+        try
+        {
+            _activityLogger.LogInfo($"Opening configuration dialog for device: {SelectedDevice.MacAddressString}");
+
+            // REQ-3.5.1-002: Open modal configuration dialog
+            var configDialog = new Views.ConfigurationDialog(SelectedDevice)
+            {
+                Owner = System.Windows.Application.Current.MainWindow
+            };
+
+            var configResult = configDialog.ShowDialog();
+
+            // User cancelled configuration dialog
+            if (configResult != true)
+            {
+                _activityLogger.LogInfo("Device configuration cancelled by user");
+                StatusText = "Configuration cancelled";
+                return;
+            }
+
+            // Get the new configuration
+            var newConfig = configDialog.GetConfiguration();
+            if (newConfig == null)
+            {
+                _activityLogger.LogError("Configuration dialog returned null configuration");
+                StatusText = "Configuration error";
+                return;
+            }
+
+            _activityLogger.LogInfo($"User entered new configuration: IP={newConfig.IPAddress}, Subnet={newConfig.SubnetMask}");
+
+            // REQ-3.5.4-001: Display confirmation dialog showing current vs. new configuration
+            var confirmDialog = new Views.ConfirmationDialog(SelectedDevice, newConfig)
+            {
+                Owner = System.Windows.Application.Current.MainWindow
+            };
+
+            var confirmResult = confirmDialog.ShowDialog();
+
+            // REQ-3.5.4-003: User must explicitly click "Apply" to proceed
+            if (confirmResult != true)
+            {
+                _activityLogger.LogInfo("Configuration changes not confirmed by user");
+                StatusText = "Configuration not applied";
+                return;
+            }
+
+            _activityLogger.LogInfo("User confirmed configuration changes");
+            StatusText = "Configuration confirmed - ready for CIP write (Phase 5)";
+
+            // TODO: Phase 5 - Send CIP Set_Attribute_Single commands
+            System.Windows.MessageBox.Show(
+                $"Configuration confirmed!\n\n" +
+                $"New IP: {newConfig.IPAddress}\n" +
+                $"New Subnet: {newConfig.SubnetMask}\n" +
+                $"Gateway: {newConfig.Gateway?.ToString() ?? "Not set"}\n" +
+                $"Hostname: {newConfig.Hostname ?? "Not set"}\n" +
+                $"DNS: {newConfig.DnsServer?.ToString() ?? "Not set"}\n\n" +
+                $"CIP write operations will be implemented in Phase 5.",
+                "Configuration Ready",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"Error during device configuration: {ex.Message}", ex);
+            StatusText = $"Configuration error: {ex.Message}";
+
+            System.Windows.MessageBox.Show(
+                $"Failed to configure device:\n\n{ex.Message}",
+                "Configuration Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
     }
 
     /// <summary>

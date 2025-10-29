@@ -45,7 +45,19 @@ This is a professional industrial automation tool for commissioning EtherNet/IP 
 - Device count display in section header
 - Row number display (1-based indexing)
 
-**Phase 4-9**: Configuration Dialog, CIP Configuration Protocol, BootP/DHCP Server, Auto-Browse, Logging/Help System, Testing & Polish
+**Phase 4 - Configuration Dialog (EtherNet/IP)** ✅ Complete
+- Modal configuration dialog (500x400px) with device information display
+- Custom IP octet input control (4-box, 0-255, auto-advance)
+- Required fields: IP Address, Subnet Mask (marked with asterisk)
+- Optional fields: Gateway, Hostname (64 char max), DNS Server
+- Real-time validation with error messages in red text
+- Hostname validation (alphanumeric, hyphens, underscores only)
+- Subnet validation (Gateway/DNS must be on same subnet)
+- Apply button enabled only when all fields valid
+- Confirmation dialog (400x300px) showing current vs. new configuration
+- Complete dialog flow with logging and status updates
+
+**Phase 5-9**: CIP Configuration Protocol, BootP/DHCP Server, Auto-Browse, Logging/Help System, Testing & Polish
 
 ## Technology Stack
 
