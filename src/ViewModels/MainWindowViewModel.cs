@@ -19,6 +19,7 @@ public class MainWindowViewModel : ViewModelBase
 
     private DeviceDiscoveryService? _discoveryService;
     private NetworkAdapterInfo? _selectedAdapter;
+    private Device? _selectedDevice;
     private string _statusText = "Ready";
     private string _currentTime = string.Empty;
     private bool _isAdministrator;
@@ -46,6 +47,13 @@ public class MainWindowViewModel : ViewModelBase
         ExitApplicationCommand = new RelayCommand(_ => ExitApplication());
         ShowActivityLogCommand = new RelayCommand(_ => ShowActivityLog());
         ShowAboutCommand = new RelayCommand(_ => ShowAbout());
+
+        // Device commands (Phase 3)
+        ConfigureDeviceCommand = new RelayCommand(_ => ConfigureDevice(), _ => SelectedDevice != null);
+        CopyMacAddressCommand = new RelayCommand(_ => CopyMacAddress(), _ => SelectedDevice != null);
+        CopyIpAddressCommand = new RelayCommand(_ => CopyIpAddress(), _ => SelectedDevice != null);
+        PingDeviceCommand = new RelayCommand(_ => PingDevice(), _ => SelectedDevice != null);
+        RefreshDeviceInfoCommand = new RelayCommand(_ => RefreshDeviceInfo(), _ => SelectedDevice != null);
 
         // Initialize
         Initialize();
@@ -143,6 +151,21 @@ public class MainWindowViewModel : ViewModelBase
     /// </summary>
     public bool CanScan => !IsScanning && SelectedAdapter != null;
 
+    /// <summary>
+    /// Currently selected device in the table (REQ-3.4-006)
+    /// </summary>
+    public Device? SelectedDevice
+    {
+        get => _selectedDevice;
+        set
+        {
+            if (SetProperty(ref _selectedDevice, value))
+            {
+                OnDeviceSelectionChanged();
+            }
+        }
+    }
+
     #endregion
 
     #region Commands
@@ -176,6 +199,31 @@ public class MainWindowViewModel : ViewModelBase
     /// Command to clear device list (REQ-3.3.4-001)
     /// </summary>
     public ICommand ClearDeviceListCommand { get; }
+
+    /// <summary>
+    /// Command to configure selected device (REQ-3.4-010, REQ-3.5.1-001)
+    /// </summary>
+    public ICommand ConfigureDeviceCommand { get; }
+
+    /// <summary>
+    /// Command to copy MAC address to clipboard (REQ-3.4-011)
+    /// </summary>
+    public ICommand CopyMacAddressCommand { get; }
+
+    /// <summary>
+    /// Command to copy IP address to clipboard (REQ-3.4-011)
+    /// </summary>
+    public ICommand CopyIpAddressCommand { get; }
+
+    /// <summary>
+    /// Command to ping device (REQ-3.4-011)
+    /// </summary>
+    public ICommand PingDeviceCommand { get; }
+
+    /// <summary>
+    /// Command to refresh device information (REQ-3.4-011)
+    /// </summary>
+    public ICommand RefreshDeviceInfoCommand { get; }
 
     #endregion
 
@@ -413,6 +461,149 @@ public class MainWindowViewModel : ViewModelBase
         _discoveryService?.ClearDevices();
         StatusText = "Device list cleared";
         OnPropertyChanged(nameof(DeviceCountText));
+    }
+
+    /// <summary>
+    /// Handle device selection changed (REQ-3.4-006)
+    /// </summary>
+    private void OnDeviceSelectionChanged()
+    {
+        // Update status bar with device information
+        if (SelectedDevice != null)
+        {
+            StatusText = $"Selected: {SelectedDevice.VendorName} {SelectedDevice.ProductName} at {SelectedDevice.IPAddressString}";
+            _activityLogger.LogInfo($"Device selected: {SelectedDevice.MacAddressString} ({SelectedDevice.IPAddressString})");
+        }
+        else
+        {
+            StatusText = "No device selected";
+        }
+
+        // Notify command state changes
+        OnPropertyChanged(nameof(SelectedDevice));
+    }
+
+    /// <summary>
+    /// Configure selected device (REQ-3.4-010, REQ-3.5.1-002)
+    /// </summary>
+    private void ConfigureDevice()
+    {
+        if (SelectedDevice == null)
+            return;
+
+        _activityLogger.LogInfo($"Opening configuration dialog for device: {SelectedDevice.MacAddressString}");
+        // TODO: Open configuration dialog (Phase 4)
+        StatusText = "Device configuration dialog (coming in Phase 4)";
+    }
+
+    /// <summary>
+    /// Copy MAC address to clipboard (REQ-3.4-011)
+    /// </summary>
+    private void CopyMacAddress()
+    {
+        if (SelectedDevice == null)
+            return;
+
+        try
+        {
+            System.Windows.Clipboard.SetText(SelectedDevice.MacAddressString);
+            _activityLogger.LogInfo($"Copied MAC address to clipboard: {SelectedDevice.MacAddressString}");
+            StatusText = $"Copied MAC address: {SelectedDevice.MacAddressString}";
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"Failed to copy MAC address: {ex.Message}", ex);
+            StatusText = "Failed to copy MAC address";
+        }
+    }
+
+    /// <summary>
+    /// Copy IP address to clipboard (REQ-3.4-011)
+    /// </summary>
+    private void CopyIpAddress()
+    {
+        if (SelectedDevice == null)
+            return;
+
+        try
+        {
+            System.Windows.Clipboard.SetText(SelectedDevice.IPAddressString);
+            _activityLogger.LogInfo($"Copied IP address to clipboard: {SelectedDevice.IPAddressString}");
+            StatusText = $"Copied IP address: {SelectedDevice.IPAddressString}";
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"Failed to copy IP address: {ex.Message}", ex);
+            StatusText = "Failed to copy IP address";
+        }
+    }
+
+    /// <summary>
+    /// Ping selected device (REQ-3.4-011)
+    /// </summary>
+    private void PingDevice()
+    {
+        if (SelectedDevice == null)
+            return;
+
+        try
+        {
+            _activityLogger.LogInfo($"Pinging device: {SelectedDevice.IPAddressString}");
+            StatusText = $"Pinging {SelectedDevice.IPAddressString}...";
+
+            var ping = new System.Net.NetworkInformation.Ping();
+            var reply = ping.Send(SelectedDevice.IPAddress, 2000);
+
+            if (reply.Status == System.Net.NetworkInformation.IPStatus.Success)
+            {
+                _activityLogger.LogInfo($"Ping successful: {SelectedDevice.IPAddressString} ({reply.RoundtripTime}ms)");
+                StatusText = $"Ping successful: {reply.RoundtripTime}ms";
+
+                System.Windows.MessageBox.Show(
+                    $"Ping to {SelectedDevice.IPAddressString} successful\n\n" +
+                    $"Round-trip time: {reply.RoundtripTime}ms\n" +
+                    $"TTL: {reply.Options?.Ttl ?? 0}",
+                    "Ping Result",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+            }
+            else
+            {
+                _activityLogger.LogWarning($"Ping failed: {SelectedDevice.IPAddressString} - {reply.Status}");
+                StatusText = $"Ping failed: {reply.Status}";
+
+                System.Windows.MessageBox.Show(
+                    $"Ping to {SelectedDevice.IPAddressString} failed\n\n" +
+                    $"Status: {reply.Status}",
+                    "Ping Result",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"Ping error: {ex.Message}", ex);
+            StatusText = $"Ping error: {ex.Message}";
+
+            System.Windows.MessageBox.Show(
+                $"Ping failed:\n\n{ex.Message}",
+                "Ping Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Refresh device information (REQ-3.4-011)
+    /// </summary>
+    private void RefreshDeviceInfo()
+    {
+        if (SelectedDevice == null)
+            return;
+
+        _activityLogger.LogInfo($"Refreshing device info: {SelectedDevice.MacAddressString}");
+        // TODO: Send List Identity request to specific device (future enhancement)
+        StatusText = "Refresh device info (coming in future phase)";
     }
 
     #endregion

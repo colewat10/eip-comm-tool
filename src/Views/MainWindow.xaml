@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:EtherNetIPTool.ViewModels"
+        xmlns:converters="clr-namespace:EtherNetIPTool.Converters"
         mc:Ignorable="d"
         Title="{Binding WindowTitle}"
         Height="768"
@@ -13,6 +14,10 @@
         Background="#F0F0F0"
         FontFamily="Segoe UI"
         FontSize="9pt">
+
+    <Window.Resources>
+        <converters:RowNumberConverter x:Key="RowNumberConverter"/>
+    </Window.Resources>
 
     <Window.DataContext>
         <vm:MainWindowViewModel/>
@@ -208,6 +213,7 @@
                     BorderThickness="1,0,1,1">
                 <DataGrid x:Name="DeviceTable"
                           ItemsSource="{Binding Devices}"
+                          SelectedItem="{Binding SelectedDevice}"
                           AutoGenerateColumns="False"
                           HeadersVisibility="Column"
                           RowHeight="20"
@@ -218,40 +224,125 @@
                           CanUserResizeRows="False"
                           CanUserAddRows="False"
                           SelectionMode="Single"
-                          FontSize="9pt">
+                          FontSize="9pt"
+                          CanUserSortColumns="True"
+                          MouseDoubleClick="DeviceTable_MouseDoubleClick">
+
+                    <!-- REQ-3.4-008, REQ-3.4-009: Status-based row styling -->
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Style.Triggers>
+                                <!-- Link-Local highlighting (REQ-3.4-008) -->
+                                <DataTrigger Binding="{Binding Status}" Value="LinkLocal">
+                                    <Setter Property="Background" Value="{StaticResource LinkLocalBrush}"/>
+                                </DataTrigger>
+                                <!-- Conflict highlighting (REQ-3.4-009) -->
+                                <DataTrigger Binding="{Binding Status}" Value="Conflict">
+                                    <Setter Property="Background" Value="{StaticResource ConflictBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+
+                    <!-- REQ-3.4-011: Context menu -->
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Configure Device"
+                                      Command="{Binding ConfigureDeviceCommand}"
+                                      ToolTip="Open configuration dialog for this device"/>
+                            <Separator/>
+                            <MenuItem Header="Copy MAC Address"
+                                      Command="{Binding CopyMacAddressCommand}"
+                                      ToolTip="Copy MAC address to clipboard"/>
+                            <MenuItem Header="Copy IP Address"
+                                      Command="{Binding CopyIpAddressCommand}"
+                                      ToolTip="Copy IP address to clipboard"/>
+                            <Separator/>
+                            <MenuItem Header="Ping Device"
+                                      Command="{Binding PingDeviceCommand}"
+                                      ToolTip="Send ICMP ping to device"/>
+                            <MenuItem Header="Refresh Info"
+                                      Command="{Binding RefreshDeviceInfoCommand}"
+                                      ToolTip="Refresh device information"/>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
+
+                    <!-- REQ-3.4-001: Column Configuration (REQ-5.5) -->
                     <DataGrid.Columns>
+                        <!-- Row number column (30px, right-aligned) -->
                         <DataGridTextColumn Header="#"
                                             Width="30"
-                                            IsReadOnly="True"/>
+                                            IsReadOnly="True"
+                                            CanUserSort="False"
+                                            Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow},
+                                                      Converter={StaticResource RowNumberConverter}}">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="HorizontalAlignment" Value="Right"/>
+                                    <Setter Property="Margin" Value="0,0,5,0"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+
+                        <!-- MAC Address (140px) - REQ-3.4-001 -->
                         <DataGridTextColumn Header="MAC Address"
                                             Width="140"
                                             Binding="{Binding MacAddressString}"
-                                            IsReadOnly="True"/>
+                                            IsReadOnly="True"
+                                            CanUserSort="True"
+                                            SortMemberPath="MacAddressString"/>
+
+                        <!-- IP Address (120px) - REQ-3.4-001 -->
                         <DataGridTextColumn Header="IP Address"
                                             Width="120"
                                             Binding="{Binding IPAddressString}"
-                                            IsReadOnly="True"/>
+                                            IsReadOnly="True"
+                                            CanUserSort="True"
+                                            SortMemberPath="IPAddressString"/>
+
+                        <!-- Subnet Mask (120px) - REQ-3.4-001 -->
                         <DataGridTextColumn Header="Subnet Mask"
                                             Width="120"
                                             Binding="{Binding SubnetMaskString}"
-                                            IsReadOnly="True"/>
+                                            IsReadOnly="True"
+                                            CanUserSort="True"
+                                            SortMemberPath="SubnetMaskString"/>
+
+                        <!-- Vendor (80px) - REQ-3.4-001, REQ-5.5 -->
                         <DataGridTextColumn Header="Vendor"
-                                            Width="150"
+                                            Width="80"
                                             Binding="{Binding VendorName}"
-                                            IsReadOnly="True"/>
+                                            IsReadOnly="True"
+                                            CanUserSort="True"
+                                            SortMemberPath="VendorName"/>
+
+                        <!-- Model (200px) - REQ-3.4-002: Ellipsis truncation with tooltip -->
                         <DataGridTextColumn Header="Model"
                                             Width="200"
                                             Binding="{Binding ProductName}"
-                                            IsReadOnly="True"/>
+                                            IsReadOnly="True"
+                                            CanUserSort="True"
+                                            SortMemberPath="ProductName">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                    <Setter Property="ToolTip" Value="{Binding ProductName}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+
+                        <!-- Status (80px) - REQ-3.4-007 -->
                         <DataGridTextColumn Header="Status"
                                             Width="80"
                                             Binding="{Binding StatusText}"
-                                            IsReadOnly="True"/>
+                                            IsReadOnly="True"
+                                            CanUserSort="True"
+                                            SortMemberPath="Status"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </Border>
 
-            <!-- Action Buttons -->
+            <!-- Action Buttons - REQ-3.5.1-001 -->
             <StackPanel Grid.Row="3"
                         Orientation="Horizontal"
                         HorizontalAlignment="Left"
@@ -259,13 +350,13 @@
                 <Button Content="Configure Selected Device"
                         Width="180"
                         Height="24"
-                        IsEnabled="False"
+                        Command="{Binding ConfigureDeviceCommand}"
                         ToolTip="Open configuration dialog for selected device"/>
                 <Button Content="Refresh Device Info"
                         Width="150"
                         Height="24"
                         Margin="10,0,0,0"
-                        IsEnabled="False"
+                        Command="{Binding RefreshDeviceInfoCommand}"
                         ToolTip="Refresh information for selected device"/>
             </StackPanel>
         </Grid>
