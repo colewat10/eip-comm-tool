@@ -81,146 +81,606 @@ Manual IP assignment (no automatic IP pool management)
 
 
 3. FUNCTIONAL REQUIREMENTS
+
 3.1 Network Interface Selection
-REQ-3.1-001: Application shall enumerate all active network adapters on startup and populate NIC dropdown selector with adapter name and current IP address.
-REQ-3.1-002: User shall be able to refresh NIC list via toolbar button to detect hot-plugged adapters.
-REQ-3.1-003: Application shall display selected NIC's IP address and subnet mask in the toolbar.
-REQ-3.1-004: Application shall automatically select the first non-loopback adapter with valid IP configuration on startup.
-REQ-3.1-005: Changing NIC selection shall clear device list and restart discovery if auto-browse is enabled.
+
+REQ-3.1-001: Adapter Enumeration
+
+Application shall enumerate all active network adapters on startup and
+populate NIC dropdown selector with adapter name and current IP address.
+
+REQ-3.1-002: Adapter Refresh
+
+User shall be able to refresh NIC list via toolbar button to detect
+hot-plugged adapters.
+
+REQ-3.1-003: Adapter Display
+
+Application shall display selected NIC's IP address and subnet mask
+in the toolbar.
+
+REQ-3.1-004: Default Adapter Selection
+
+Application shall automatically select the first non-loopback adapter
+with valid IP configuration on startup.
+
+REQ-3.1-005: Selection Change Behavior
+
+Changing NIC selection shall clear device list and restart discovery
+if auto-browse is enabled.
+
 
 3.2 Operating Modes
-REQ-3.2-001: Application shall support two mutually exclusive operating modes: EtherNet/IP and BootP/DHCP, selected via radio buttons.
-REQ-3.2-002: EtherNet/IP mode shall be the default mode on application startup.
-REQ-3.2-003: Switching to BootP/DHCP mode shall disable auto-browse controls and clear device table.
-REQ-3.2-004: Switching to EtherNet/IP mode from BootP/DHCP shall re-enable auto-browse and trigger immediate scan if auto-browse is enabled.
-REQ-3.2-005: BootP/DHCP mode shall be disabled (grayed out) if application is not running with Administrator privileges, with tooltip explaining privilege requirement.
+
+REQ-3.2-001: Mode Selection
+
+Application shall support two mutually exclusive operating modes:
+EtherNet/IP and BootP/DHCP, selected via radio buttons.
+
+REQ-3.2-002: Default Mode
+
+EtherNet/IP mode shall be the default mode on application startup.
+
+REQ-3.2-003: BootP/DHCP Mode Activation
+
+Switching to BootP/DHCP mode shall disable auto-browse controls
+and clear device table.
+
+REQ-3.2-004: EtherNet/IP Mode Activation
+
+Switching to EtherNet/IP mode from BootP/DHCP shall re-enable
+auto-browse and trigger immediate scan if auto-browse is enabled.
+
+REQ-3.2-005: Privilege Enforcement
+
+BootP/DHCP mode shall be disabled (grayed out) if application is
+not running with Administrator privileges, with tooltip explaining
+privilege requirement.
+
 
 3.3 Device Discovery (EtherNet/IP Mode)
+
 3.3.1 Discovery Protocol
-REQ-3.3.1-001: Application shall discover devices by broadcasting CIP List Identity (command 0x0063) to calculated subnet broadcast address on port 44818 via selected NIC. See REQ-4.1.1-002 for broadcast address calculation.
-REQ-3.3.1-002: Discovery broadcast shall use EtherNet/IP encapsulation protocol with unconnected message format.
-REQ-3.3.1-003: Application shall wait 3 seconds for List Identity responses after each broadcast.
-REQ-3.3.1-004: Application shall parse responses to extract: IP address, MAC address (via ARP lookup), vendor ID, device type, product code, product name, serial number.
-REQ-3.3.1-005: Vendor ID shall be mapped to vendor name using standard CIP vendor ID table (0x0001=Allen-Bradley, 0x0103=SICK, 0x017F=Banner, 0x0083=Pepperl+Fuchs).
+
+REQ-3.3.1-001: List Identity Broadcast
+
+Application shall discover devices by broadcasting CIP List Identity
+(command 0x0063) to calculated subnet broadcast address on port 44818
+via selected NIC.
+
+See REQ-4.1.1-002 for broadcast address calculation.
+
+REQ-3.3.1-002: Protocol Encapsulation
+
+Discovery broadcast shall use EtherNet/IP encapsulation protocol
+with unconnected message format.
+
+REQ-3.3.1-003: Response Timeout
+
+Application shall wait 3 seconds for List Identity responses after
+each broadcast.
+
+REQ-3.3.1-004: Response Parsing
+
+Application shall parse responses to extract: IP address, MAC address
+(via ARP lookup), vendor ID, device type, product code, product name,
+serial number.
+
+REQ-3.3.1-005: Vendor ID Mapping
+
+Vendor ID shall be mapped to vendor name using standard CIP vendor ID
+table:
+- 0x0001 = Allen-Bradley
+- 0x0103 = SICK
+- 0x017F = Banner
+- 0x0083 = Pepperl+Fuchs
+
 3.3.2 Auto-Browse Functionality
-REQ-3.3.2-001: Auto-browse checkbox shall enable/disable automatic periodic device discovery.
-REQ-3.3.2-002: Auto-browse shall be enabled by default on application startup.
-REQ-3.3.2-003: Scan interval shall be user-configurable from 1-60 seconds, default 5 seconds.
-REQ-3.3.2-004: Auto-browse shall perform discovery scans in background thread without blocking UI.
-REQ-3.3.2-005: Device table shall update in real-time as responses are received.
-REQ-3.3.2-006: Devices not responding for 3 consecutive scans (15 seconds default) shall be removed from table.
+
+REQ-3.3.2-001: Auto-Browse Toggle
+
+Auto-browse checkbox shall enable/disable automatic periodic device
+discovery.
+
+REQ-3.3.2-002: Default State
+
+Auto-browse shall be enabled by default on application startup.
+
+REQ-3.3.2-003: Scan Interval Configuration
+
+Scan interval shall be user-configurable from 1-60 seconds, default
+5 seconds.
+
+REQ-3.3.2-004: Background Operation
+
+Auto-browse shall perform discovery scans in background thread without
+blocking UI.
+
+REQ-3.3.2-005: Real-Time Updates
+
+Device table shall update in real-time as responses are received.
+
+REQ-3.3.2-006: Device Removal
+
+Devices not responding for 3 consecutive scans (15 seconds default)
+shall be removed from table.
+
 3.3.3 Manual Scan
-REQ-3.3.3-001: "Scan Now" button shall trigger immediate discovery broadcast regardless of auto-browse state.
-REQ-3.3.3-002: Manual scan shall clear existing device list before populating new results.
-REQ-3.3.3-003: Manual scan shall display "Scanning..." status during 3-second response wait period.
+
+REQ-3.3.3-001: Manual Scan Trigger
+
+"Scan Now" button shall trigger immediate discovery broadcast
+regardless of auto-browse state.
+
+REQ-3.3.3-002: List Clear on Scan
+
+Manual scan shall clear existing device list before populating
+new results.
+
+REQ-3.3.3-003: Scan Status Display
+
+Manual scan shall display "Scanning..." status during 3-second
+response wait period.
+
 3.3.4 Device List Management
-REQ-3.3.4-001: "Clear List" button shall remove all devices from table and reset discovery state.
-REQ-3.3.4-002: Device list shall not persist between application sessions (cleared on exit).
-REQ-3.3.4-003: Duplicate devices (same MAC address) shall be updated in place, not added as new entries.
+
+REQ-3.3.4-001: List Clear Function
+
+"Clear List" button shall remove all devices from table and reset
+discovery state.
+
+REQ-3.3.4-002: Session Persistence
+
+Device list shall not persist between application sessions
+(cleared on exit).
+
+REQ-3.3.4-003: Duplicate Handling
+
+Duplicate devices (same MAC address) shall be updated in place,
+not added as new entries.
+
 
 3.4 Device Table
-REQ-3.4-001: Device table shall display columns: Row #, MAC Address (full format XX:XX:XX:XX:XX:XX), IP Address, Subnet Mask, Vendor, Model, Status.
-REQ-3.4-002: Model column shall truncate long device names with ellipsis, full name shown in tooltip on hover.
-REQ-3.4-003: All columns shall be sortable by clicking column header (ascending/descending toggle).
-REQ-3.4-004: Default sort order shall be discovery order (chronological).
-REQ-3.4-005: Table rows shall be 20px height for optimal density.
-REQ-3.4-006: Single row selection only (one device highlighted at a time).
-REQ-3.4-007: Status column shall display: "OK" (normal), "Link-Local" (169.254.x.x IP), "Conflict" (duplicate IP detected on subnet).
-REQ-3.4-008: Link-Local rows shall be highlighted in light yellow background.
-REQ-3.4-009: Conflict rows shall be highlighted in light red background.
-REQ-3.4-010: Double-clicking a row shall open configuration dialog for that device.
-REQ-3.4-011: Right-click context menu shall provide: Configure, Copy MAC, Copy IP, Ping Device, Refresh Info.
-REQ-3.4-012: Device table shall show device count in section header (e.g., "12 device(s)").
-REQ-3.4-013: When BootP/DHCP mode active, table shall display centered message: "BootP/DHCP Server Active - Listening for device requests on UDP 68".
+
+REQ-3.4-001: Column Configuration
+
+Device table shall display columns: Row #, MAC Address (full format
+XX:XX:XX:XX:XX:XX), IP Address, Subnet Mask, Vendor, Model, Status.
+
+REQ-3.4-002: Model Display
+
+Model column shall truncate long device names with ellipsis, full
+name shown in tooltip on hover.
+
+REQ-3.4-003: Column Sorting
+
+All columns shall be sortable by clicking column header
+(ascending/descending toggle).
+
+REQ-3.4-004: Default Sort Order
+
+Default sort order shall be discovery order (chronological).
+
+REQ-3.4-005: Row Height
+
+Table rows shall be 20px height for optimal density.
+
+REQ-3.4-006: Row Selection
+
+Single row selection only (one device highlighted at a time).
+
+REQ-3.4-007: Status Values
+
+Status column shall display:
+- "OK" (normal)
+- "Link-Local" (169.254.x.x IP)
+- "Conflict" (duplicate IP detected on subnet)
+
+REQ-3.4-008: Link-Local Highlighting
+
+Link-Local rows shall be highlighted in light yellow background.
+
+REQ-3.4-009: Conflict Highlighting
+
+Conflict rows shall be highlighted in light red background.
+
+REQ-3.4-010: Double-Click Action
+
+Double-clicking a row shall open configuration dialog for that device.
+
+REQ-3.4-011: Context Menu
+
+Right-click context menu shall provide: Configure, Copy MAC, Copy IP,
+Ping Device, Refresh Info.
+
+REQ-3.4-012: Device Count Display
+
+Device table shall show device count in section header
+(e.g., "12 device(s)").
+
+REQ-3.4-013: BootP Mode Display
+
+When BootP/DHCP mode active, table shall display centered message:
+"BootP/DHCP Server Active - Listening for device requests on UDP 68".
+
 
 3.5 Device Configuration (EtherNet/IP Mode)
+
 3.5.1 Configuration Dialog Trigger
-REQ-3.5.1-001: "Configure Selected Device" button shall be enabled only when a device is selected in table.
-REQ-3.5.1-002: Clicking button or double-clicking device row shall open modal configuration dialog.
-REQ-3.5.1-003: Configuration dialog shall be fixed size 500x400 pixels, centered on parent window.
-3.5.2 Dialog Display - Current Configuration
-REQ-3.5.2-001: Dialog shall display read-only device information section showing: MAC address, vendor name and ID, device type and code, product name, serial number, current IP, current subnet, current gateway (if readable).
-REQ-3.5.2-002: Current configuration shall be retrieved via CIP Get_Attribute_Single if not available from List Identity response.
-3.5.3 Dialog Input - New Configuration
-REQ-3.5.3-001: IP Address and Subnet Mask fields shall be required (marked with asterisk).
-REQ-3.5.3-002: Gateway, Hostname, and DNS Server fields shall be optional.
-REQ-3.5.3-003: IP and subnet fields shall use 4-octet input boxes, each octet accepting 0-255 numeric values only.
-REQ-3.5.3-004: Hostname field shall accept alphanumeric characters, hyphens, and underscores only, max 64 characters.
-REQ-3.5.3-005: All IP address fields shall validate as proper IPv4 format.
-REQ-3.5.3-006: Gateway and DNS IPs shall be validated to be on same subnet as IP/Subnet combination.
-REQ-3.5.3-007: Validation errors shall display next to invalid field in red text.
-REQ-3.5.3-008: "Apply Configuration" button shall be disabled until all required fields are valid.
+
+REQ-3.5.1-001: Button Enable State
+
+"Configure Selected Device" button shall be enabled only when a
+device is selected in table.
+
+REQ-3.5.1-002: Dialog Activation
+
+Clicking button or double-clicking device row shall open modal
+configuration dialog.
+
+REQ-3.5.1-003: Dialog Size and Position
+
+Configuration dialog shall be fixed size 500x400 pixels, centered
+on parent window.
+
+3.5.2 Current Configuration Display
+
+REQ-3.5.2-001: Device Information Section
+
+Dialog shall display read-only device information section showing:
+MAC address, vendor name and ID, device type and code, product name,
+serial number, current IP, current subnet, current gateway
+(if readable).
+
+REQ-3.5.2-002: Configuration Retrieval
+
+Current configuration shall be retrieved via CIP Get_Attribute_Single
+if not available from List Identity response.
+
+3.5.3 New Configuration Input
+
+REQ-3.5.3-001: Required Fields
+
+IP Address and Subnet Mask fields shall be required (marked with
+asterisk).
+
+REQ-3.5.3-002: Optional Fields
+
+Gateway, Hostname, and DNS Server fields shall be optional.
+
+REQ-3.5.3-003: IP Address Input Format
+
+IP and subnet fields shall use 4-octet input boxes, each octet
+accepting 0-255 numeric values only.
+
+REQ-3.5.3-004: Hostname Input Format
+
+Hostname field shall accept alphanumeric characters, hyphens, and
+underscores only, max 64 characters.
+
+REQ-3.5.3-005: IP Address Validation
+
+All IP address fields shall validate as proper IPv4 format.
+
+REQ-3.5.3-006: Subnet Validation
+
+Gateway and DNS IPs shall be validated to be on same subnet as
+IP/Subnet combination.
+
+REQ-3.5.3-007: Validation Error Display
+
+Validation errors shall display next to invalid field in red text.
+
+REQ-3.5.3-008: Apply Button State
+
+"Apply Configuration" button shall be disabled until all required
+fields are valid.
+
 3.5.4 Confirmation Flow
-REQ-3.5.4-001: Clicking "Apply Configuration" shall display confirmation dialog showing current and new configuration side-by-side.
-REQ-3.5.4-002: Confirmation dialog shall have "Apply" and "Cancel" buttons.
-REQ-3.5.4-003: User must explicitly click "Apply" to proceed with configuration write.
+
+REQ-3.5.4-001: Confirmation Dialog
+
+Clicking "Apply Configuration" shall display confirmation dialog
+showing current and new configuration side-by-side.
+
+REQ-3.5.4-002: Confirmation Controls
+
+Confirmation dialog shall have "Apply" and "Cancel" buttons.
+
+REQ-3.5.4-003: Explicit Confirmation
+
+User must explicitly click "Apply" to proceed with configuration write.
+
 3.5.5 CIP Write Operations
-REQ-3.5.5-001: Configuration shall be written via CIP Set_Attribute_Single service (0x10) to TCP/IP Interface Object (Class 0xF5, Instance 1).
-REQ-3.5.5-002: Attributes shall be written in sequence: IP Address (Attr 5), Subnet Mask (Attr 6), Gateway (Attr 7, if provided), Hostname (Attr 8, if provided), DNS Server (Attr 10, if provided).
-REQ-3.5.5-003: Each write operation shall use Unconnected Send (Service 0x52) via UCMM, no session required.
-REQ-3.5.5-004: Each CIP message shall have 3-second timeout.
-REQ-3.5.5-005: Application shall wait 100ms between sequential attribute writes.
-REQ-3.5.5-006: Progress indicator shall display "Sending configuration... (X/Y)" during write operations.
-REQ-3.5.5-007: If any write fails, remaining writes shall be skipped and error reported.
-REQ-3.5.5-008: Success/failure result shall be displayed in modal dialog after completion.
-REQ-3.5.5-009: On success, device shall be removed from list (will reappear at new IP on next scan).
-REQ-3.5.5-010: Common CIP error codes shall be translated to human-readable messages (0x04=Path unknown, 0x08=Service not supported, 0x0F=Attribute not supported, 0x14=Attribute not settable).
+
+REQ-3.5.5-001: Write Method
+
+Configuration shall be written via CIP Set_Attribute_Single service
+(0x10) to TCP/IP Interface Object (Class 0xF5, Instance 1).
+
+REQ-3.5.5-002: Write Sequence
+
+Attributes shall be written in sequence:
+- IP Address (Attr 5)
+- Subnet Mask (Attr 6)
+- Gateway (Attr 7, if provided)
+- Hostname (Attr 8, if provided)
+- DNS Server (Attr 10, if provided)
+
+REQ-3.5.5-003: Message Transport
+
+Each write operation shall use Unconnected Send (Service 0x52) via
+UCMM, no session required.
+
+REQ-3.5.5-004: Message Timeout
+
+Each CIP message shall have 3-second timeout.
+
+REQ-3.5.5-005: Inter-Message Delay
+
+Application shall wait 100ms between sequential attribute writes.
+
+REQ-3.5.5-006: Progress Indication
+
+Progress indicator shall display "Sending configuration... (X/Y)"
+during write operations.
+
+REQ-3.5.5-007: Error Handling
+
+If any write fails, remaining writes shall be skipped and error
+reported.
+
+REQ-3.5.5-008: Result Display
+
+Success/failure result shall be displayed in modal dialog after
+completion.
+
+REQ-3.5.5-009: Success Behavior
+
+On success, device shall be removed from list (will reappear at
+new IP on next scan).
+
+REQ-3.5.5-010: Error Code Translation
+
+Common CIP error codes shall be translated to human-readable messages:
+- 0x04 = Path unknown
+- 0x08 = Service not supported
+- 0x0F = Attribute not supported
+- 0x14 = Attribute not settable
+
 
 3.6 BootP/DHCP Server Functionality
+
 3.6.1 Server Activation
-REQ-3.6.1-001: Selecting BootP/DHCP mode radio button shall start UDP server listening on port 68.
-REQ-3.6.1-002: If port binding fails due to privilege error (SocketException with AccessDenied), application shall display error message explaining Administrator requirement and revert to EtherNet/IP mode.
-REQ-3.6.1-003: Status bar shall display "BootP Server: Listening on UDP 68" when mode active.
-REQ-3.6.1-004: Switching back to EtherNet/IP mode shall stop UDP server and close socket.
+
+REQ-3.6.1-001: Server Start
+
+Selecting BootP/DHCP mode radio button shall start UDP server
+listening on port 68.
+
+REQ-3.6.1-002: Privilege Error Handling
+
+If port binding fails due to privilege error (SocketException with
+AccessDenied), application shall display error message explaining
+Administrator requirement and revert to EtherNet/IP mode.
+
+REQ-3.6.1-003: Status Display
+
+Status bar shall display "BootP Server: Listening on UDP 68" when
+mode active.
+
+REQ-3.6.1-004: Server Stop
+
+Switching back to EtherNet/IP mode shall stop UDP server and close
+socket.
+
 3.6.2 Request Detection
-REQ-3.6.2-001: Application shall listen for BootP BOOTREQUEST packets (Op=0x01) on UDP port 68.
-REQ-3.6.2-002: Requests shall be filtered to selected NIC only (ignore requests on other interfaces).
-REQ-3.6.2-003: Upon receiving valid request, application shall immediately display BootP configuration dialog as modal popup.
-REQ-3.6.2-004: Multiple simultaneous requests shall be queued and presented one at a time.
+
+REQ-3.6.2-001: Request Listening
+
+Application shall listen for BootP BOOTREQUEST packets (Op=0x01)
+on UDP port 68.
+
+REQ-3.6.2-002: Interface Filtering
+
+Requests shall be filtered to selected NIC only (ignore requests
+on other interfaces).
+
+REQ-3.6.2-003: Dialog Display
+
+Upon receiving valid request, application shall immediately display
+BootP configuration dialog as modal popup.
+
+REQ-3.6.2-004: Request Queuing
+
+Multiple simultaneous requests shall be queued and presented one
+at a time.
+
 3.6.3 BootP Configuration Dialog
-REQ-3.6.3-001: Dialog shall display device MAC address from request CHADDR field.
-REQ-3.6.3-002: Dialog shall display request timestamp and transaction ID (XID).
-REQ-3.6.3-003: User shall enter IP Address (required), Subnet Mask (required), and Gateway (optional).
-REQ-3.6.3-004: Validation rules shall match EtherNet/IP configuration dialog.
-REQ-3.6.3-005: Checkbox "Disable DHCP mode after assignment" shall be checked by default.
-REQ-3.6.3-006: "Assign & Configure" button shall be enabled only when required fields are valid.
-REQ-3.6.3-007: "Ignore Request" button shall close dialog without taking action.
+
+REQ-3.6.3-001: MAC Address Display
+
+Dialog shall display device MAC address from request CHADDR field.
+
+REQ-3.6.3-002: Request Information Display
+
+Dialog shall display request timestamp and transaction ID (XID).
+
+REQ-3.6.3-003: Configuration Input
+
+User shall enter IP Address (required), Subnet Mask (required),
+and Gateway (optional).
+
+REQ-3.6.3-004: Validation Consistency
+
+Validation rules shall match EtherNet/IP configuration dialog.
+
+REQ-3.6.3-005: DHCP Disable Option
+
+Checkbox "Disable DHCP mode after assignment" shall be checked
+by default.
+
+REQ-3.6.3-006: Assign Button State
+
+"Assign & Configure" button shall be enabled only when required
+fields are valid.
+
+REQ-3.6.3-007: Ignore Option
+
+"Ignore Request" button shall close dialog without taking action.
+
 3.6.4 BootP Reply and DHCP Disable
-REQ-3.6.4-001: Clicking "Assign & Configure" shall send BootP BOOTREPLY packet (Op=0x02) with assigned IP in YIADDR field.
-REQ-3.6.4-002: Reply shall include DHCP options: Magic Cookie (0x63825363), Option 1 (Subnet Mask), Option 3 (Router/Gateway if provided), Option 255 (End).
-REQ-3.6.4-003: Reply destination shall be broadcast (255.255.255.255:68) or unicast to assigned IP depending on request FLAGS field.
-REQ-3.6.4-004: Reply source port shall be UDP 67, destination MAC shall match request CHADDR.
-REQ-3.6.4-005: After sending reply, application shall wait 2 seconds for device to configure itself.
-REQ-3.6.4-006: If "Disable DHCP mode" checkbox is checked, application shall send CIP Set_Attribute_Single to Configuration Control attribute (Class 0xF5, Instance 1, Attribute 3) with value 0x00000001 to set static IP mode.
-REQ-3.6.4-007: DHCP disable command shall have 3-second timeout.
-REQ-3.6.4-008: Success/failure result shall be displayed in result dialog.
-REQ-3.6.4-009: After completion, application shall suggest user switch to EtherNet/IP mode to verify device at new IP.
+
+REQ-3.6.4-001: Reply Transmission
+
+Clicking "Assign & Configure" shall send BootP BOOTREPLY packet
+(Op=0x02) with assigned IP in YIADDR field.
+
+REQ-3.6.4-002: DHCP Options
+
+Reply shall include DHCP options:
+- Magic Cookie (0x63825363)
+- Option 1 (Subnet Mask)
+- Option 3 (Router/Gateway if provided)
+- Option 255 (End)
+
+REQ-3.6.4-003: Reply Destination
+
+Reply destination shall be broadcast (255.255.255.255:68) or unicast
+to assigned IP depending on request FLAGS field.
+
+REQ-3.6.4-004: Reply Addressing
+
+Reply source port shall be UDP 67, destination MAC shall match
+request CHADDR.
+
+REQ-3.6.4-005: Configuration Wait
+
+After sending reply, application shall wait 2 seconds for device
+to configure itself.
+
+REQ-3.6.4-006: DHCP Mode Disable
+
+If "Disable DHCP mode" checkbox is checked, application shall send
+CIP Set_Attribute_Single to Configuration Control attribute
+(Class 0xF5, Instance 1, Attribute 3) with value 0x00000001 to set
+static IP mode.
+
+REQ-3.6.4-007: Disable Timeout
+
+DHCP disable command shall have 3-second timeout.
+
+REQ-3.6.4-008: Result Display
+
+Success/failure result shall be displayed in result dialog.
+
+REQ-3.6.4-009: Post-Configuration Guidance
+
+After completion, application shall suggest user switch to EtherNet/IP
+mode to verify device at new IP.
+
 
 3.7 Logging and Reporting
-REQ-3.7-001: Application shall maintain detailed activity log of all operations.
-REQ-3.7-002: Log entries shall include timestamp (HH:MM:SS.mmm), category (INFO, SCAN, DISC, CONFIG, CIP, BOOTP, ERROR, WARN), and message text.
-REQ-3.7-003: Log shall capture: NIC selection, mode changes, scan operations, device discoveries, configuration attempts, CIP message results, BootP transactions, errors and warnings.
-REQ-3.7-004: Log viewer shall be accessible via Tools menu > Activity Log.
-REQ-3.7-005: Log viewer window shall display log entries in scrollable list with filter by category.
-REQ-3.7-006: Log shall be exportable to text file via "Export Log" button in viewer.
-REQ-3.7-007: Log file shall use UTF-8 encoding with .txt extension.
-REQ-3.7-008: Log shall be cleared on application exit (not persisted between sessions).
-REQ-3.7-009: "Clear Log" button in viewer shall empty log without closing viewer window.
+
+REQ-3.7-001: Activity Log
+
+Application shall maintain detailed activity log of all operations.
+
+REQ-3.7-002: Log Entry Format
+
+Log entries shall include timestamp (HH:MM:SS.mmm), category (INFO,
+SCAN, DISC, CONFIG, CIP, BOOTP, ERROR, WARN), and message text.
+
+REQ-3.7-003: Log Content Coverage
+
+Log shall capture: NIC selection, mode changes, scan operations,
+device discoveries, configuration attempts, CIP message results,
+BootP transactions, errors and warnings.
+
+REQ-3.7-004: Log Viewer Access
+
+Log viewer shall be accessible via Tools menu > Activity Log.
+
+REQ-3.7-005: Log Viewer Display
+
+Log viewer window shall display log entries in scrollable list with
+filter by category.
+
+REQ-3.7-006: Log Export
+
+Log shall be exportable to text file via "Export Log" button in viewer.
+
+REQ-3.7-007: Export Format
+
+Log file shall use UTF-8 encoding with .txt extension.
+
+REQ-3.7-008: Session Persistence
+
+Log shall be cleared on application exit (not persisted between sessions).
+
+REQ-3.7-009: Log Clear Function
+
+"Clear Log" button in viewer shall empty log without closing viewer
+window.
+
 
 3.8 Help and Documentation
+
 3.8.1 Contextual Help
-REQ-3.8.1-001: All input fields and buttons shall have tooltips appearing on mouse hover after 500ms delay.
-REQ-3.8.1-002: Status bar shall display extended help text for focused UI element.
-REQ-3.8.1-003: Help text shall be concise, technical, and relevant to controls engineers.
+
+REQ-3.8.1-001: Tooltip Display
+
+All input fields and buttons shall have tooltips appearing on mouse
+hover after 500ms delay.
+
+REQ-3.8.1-002: Status Bar Help
+
+Status bar shall display extended help text for focused UI element.
+
+REQ-3.8.1-003: Help Text Style
+
+Help text shall be concise, technical, and relevant to controls
+engineers.
+
 3.8.2 Embedded Manual
-REQ-3.8.2-001: Help menu > User Manual shall open embedded HTML help viewer.
-REQ-3.8.2-002: Manual shall include sections: Getting Started, EtherNet/IP Mode, BootP/DHCP Mode, Troubleshooting, Technical Reference.
-REQ-3.8.2-003: F1 key shall open help viewer to context-sensitive section based on current UI focus.
-REQ-3.8.2-004: Manual shall be navigable with table of contents and search functionality.
+
+REQ-3.8.2-001: Manual Viewer
+
+Help menu > User Manual shall open embedded HTML help viewer.
+
+REQ-3.8.2-002: Manual Content
+
+Manual shall include sections: Getting Started, EtherNet/IP Mode,
+BootP/DHCP Mode, Troubleshooting, Technical Reference.
+
+REQ-3.8.2-003: Context-Sensitive Help
+
+F1 key shall open help viewer to context-sensitive section based on
+current UI focus.
+
+REQ-3.8.2-004: Manual Navigation
+
+Manual shall be navigable with table of contents and search
+functionality.
+
 3.8.3 Technical Reference
-REQ-3.8.3-001: Help menu > CIP Protocol Reference shall provide technical details on: CIP object classes, TCP/IP Interface Object attributes, packet structures, status codes.
-REQ-3.8.3-002: Help menu > BootP/DHCP Reference shall document BootP packet structure, DHCP options used, port requirements.
-REQ-3.8.3-003: Help menu > Troubleshooting Guide shall provide flowcharts and solutions for: device not discovered, configuration fails, IP conflicts, BootP request not received, privilege errors.
+
+REQ-3.8.3-001: CIP Protocol Reference
+
+Help menu > CIP Protocol Reference shall provide technical details on:
+CIP object classes, TCP/IP Interface Object attributes, packet
+structures, status codes.
+
+REQ-3.8.3-002: BootP/DHCP Reference
+
+Help menu > BootP/DHCP Reference shall document BootP packet structure,
+DHCP options used, port requirements.
+
+REQ-3.8.3-003: Troubleshooting Guide
+
+Help menu > Troubleshooting Guide shall provide flowcharts and
+solutions for: device not discovered, configuration fails, IP conflicts,
+BootP request not received, privilege errors.
 
 4. TECHNICAL SPECIFICATIONS
 4.1 EtherNet/IP Protocol
