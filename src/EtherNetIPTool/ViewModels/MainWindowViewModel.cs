@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using EtherNetIPTool.Models;
 using EtherNetIPTool.Services;
 using Serilog;
 
@@ -7,7 +8,7 @@ namespace EtherNetIPTool.ViewModels;
 
 /// <summary>
 /// ViewModel for the main application window
-/// Manages UI state, network interface selection, and application commands
+/// Manages UI state, network interface selection, device discovery, and application commands
 /// </summary>
 public class MainWindowViewModel : ViewModelBase
 {
@@ -16,10 +17,12 @@ public class MainWindowViewModel : ViewModelBase
     private readonly ApplicationSettingsService _settingsService;
     private readonly PrivilegeDetectionService _privilegeService;
 
+    private DeviceDiscoveryService? _discoveryService;
     private NetworkAdapterInfo? _selectedAdapter;
     private string _statusText = "Ready";
     private string _currentTime = string.Empty;
     private bool _isAdministrator;
+    private bool _isScanning;
 
     /// <summary>
     /// Constructor for MainWindowViewModel
@@ -38,6 +41,8 @@ public class MainWindowViewModel : ViewModelBase
 
         // Initialize commands
         RefreshNicListCommand = new RelayCommand(_ => RefreshNetworkAdapters());
+        ScanNowCommand = new AsyncRelayCommand(_ => ScanNowAsync());
+        ClearDeviceListCommand = new RelayCommand(_ => ClearDeviceList(), _ => Devices.Any());
         ExitApplicationCommand = new RelayCommand(_ => ExitApplication());
         ShowActivityLogCommand = new RelayCommand(_ => ShowActivityLog());
         ShowAboutCommand = new RelayCommand(_ => ShowAbout());
@@ -107,6 +112,37 @@ public class MainWindowViewModel : ViewModelBase
     /// </summary>
     public string PrivilegeStatus => _privilegeService.GetPrivilegeLevelDescription();
 
+    /// <summary>
+    /// Collection of discovered devices (bound from discovery service)
+    /// </summary>
+    public ObservableCollection<Device> Devices =>
+        _discoveryService?.Devices ?? new ObservableCollection<Device>();
+
+    /// <summary>
+    /// Device count text for display
+    /// </summary>
+    public string DeviceCountText => $"{Devices.Count} device(s)";
+
+    /// <summary>
+    /// Indicates if a device scan is in progress
+    /// </summary>
+    public bool IsScanning
+    {
+        get => _isScanning;
+        set
+        {
+            if (SetProperty(ref _isScanning, value))
+            {
+                OnPropertyChanged(nameof(CanScan));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Can perform scan (not already scanning and adapter selected)
+    /// </summary>
+    public bool CanScan => !IsScanning && SelectedAdapter != null;
+
     #endregion
 
     #region Commands
@@ -130,6 +166,16 @@ public class MainWindowViewModel : ViewModelBase
     /// Command to show about dialog
     /// </summary>
     public ICommand ShowAboutCommand { get; }
+
+    /// <summary>
+    /// Command to perform device scan (REQ-3.3.3-001)
+    /// </summary>
+    public ICommand ScanNowCommand { get; }
+
+    /// <summary>
+    /// Command to clear device list (REQ-3.3.4-001)
+    /// </summary>
+    public ICommand ClearDeviceListCommand { get; }
 
     #endregion
 
@@ -236,12 +282,31 @@ public class MainWindowViewModel : ViewModelBase
 
             StatusText = $"Selected: {SelectedAdapter.DisplayName}";
 
-            // Notify property changes for dependent properties
+            // Create new discovery service for selected adapter
+            _discoveryService?.Dispose();
+            _discoveryService = new DeviceDiscoveryService(_activityLogger, SelectedAdapter);
+
+            // Subscribe to collection changes to update device count
+            _discoveryService.Devices.CollectionChanged += (s, e) =>
+            {
+                OnPropertyChanged(nameof(DeviceCountText));
+            };
+
+            // Notify property changes
             OnPropertyChanged(nameof(SelectedAdapter));
+            OnPropertyChanged(nameof(Devices));
+            OnPropertyChanged(nameof(DeviceCountText));
+            OnPropertyChanged(nameof(CanScan));
         }
         else
         {
+            _discoveryService?.Dispose();
+            _discoveryService = null;
             StatusText = "No adapter selected";
+
+            OnPropertyChanged(nameof(Devices));
+            OnPropertyChanged(nameof(DeviceCountText));
+            OnPropertyChanged(nameof(CanScan));
         }
     }
 
@@ -296,6 +361,58 @@ public class MainWindowViewModel : ViewModelBase
             "About",
             System.Windows.MessageBoxButton.OK,
             System.Windows.MessageBoxImage.Information);
+    }
+
+    /// <summary>
+    /// Perform device scan (REQ-3.3.3-001)
+    /// </summary>
+    private async Task ScanNowAsync()
+    {
+        if (_discoveryService == null || SelectedAdapter == null)
+        {
+            _activityLogger.LogWarning("Cannot scan: No network adapter selected");
+            StatusText = "Please select a network adapter";
+            return;
+        }
+
+        try
+        {
+            IsScanning = true;
+            StatusText = "Scanning for devices...";
+
+            var devicesFound = await _discoveryService.ScanAsync();
+
+            StatusText = devicesFound > 0
+                ? $"Scan complete. Found {devicesFound} device(s)"
+                : "Scan complete. No devices found";
+
+            OnPropertyChanged(nameof(DeviceCountText));
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"Scan failed: {ex.Message}", ex);
+            StatusText = $"Scan failed: {ex.Message}";
+
+            System.Windows.MessageBox.Show(
+                $"Device scan failed:\n\n{ex.Message}",
+                "Scan Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsScanning = false;
+        }
+    }
+
+    /// <summary>
+    /// Clear all devices from list (REQ-3.3.4-001)
+    /// </summary>
+    private void ClearDeviceList()
+    {
+        _discoveryService?.ClearDevices();
+        StatusText = "Device list cleared";
+        OnPropertyChanged(nameof(DeviceCountText));
     }
 
     #endregion
