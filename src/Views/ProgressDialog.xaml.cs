@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using EtherNetIPTool.Services;
 
 namespace EtherNetIPTool.Views;
 
@@ -9,11 +10,17 @@ namespace EtherNetIPTool.Views;
 /// </summary>
 public partial class ProgressDialog : Window
 {
+    private readonly ActivityLogger _logger;
     private bool _canClose = false;
 
-    public ProgressDialog()
+    public ProgressDialog(ActivityLogger logger)
     {
         InitializeComponent();
+
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        // Log progress dialog shown (REQ-3.7-003)
+        _logger.LogConfig("Configuration write progress dialog displayed");
     }
 
     /// <summary>
@@ -44,6 +51,7 @@ public partial class ProgressDialog : Window
     {
         Dispatcher.Invoke(() =>
         {
+            _logger.LogConfig("Configuration write operation completed, closing progress dialog");
             _canClose = true;
             Close();
         });
@@ -56,6 +64,8 @@ public partial class ProgressDialog : Window
     {
         if (!_canClose)
         {
+            // Log user attempting to close during operation (REQ-3.7-003)
+            _logger.LogWarning("User attempted to close progress dialog during write operation (prevented)");
             e.Cancel = true;
         }
     }

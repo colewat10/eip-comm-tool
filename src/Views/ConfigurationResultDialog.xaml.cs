@@ -9,12 +9,29 @@ namespace EtherNetIPTool.Views;
 /// </summary>
 public partial class ConfigurationResultDialog : Window
 {
-    public ConfigurationResultDialog(ConfigurationWriteResult result)
+    private readonly ActivityLogger _logger;
+    private readonly ConfigurationWriteResult _result;
+
+    public ConfigurationResultDialog(ConfigurationWriteResult result, ActivityLogger logger)
     {
         InitializeComponent();
 
         if (result == null)
             throw new ArgumentNullException(nameof(result));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        _result = result;
+
+        // Log result dialog display (REQ-3.7-003)
+        if (result.Success)
+        {
+            _logger.LogConfig($"Configuration write successful: {result.SuccessCount}/{result.TotalWrites} attributes written");
+        }
+        else
+        {
+            _logger.LogError($"Configuration write failed: {result.SuccessCount}/{result.TotalWrites} attributes written, {result.FailureCount} failed");
+            _logger.LogError($"First error: {result.GetFirstErrorMessage()}");
+        }
 
         DisplayResult(result);
     }
@@ -65,6 +82,7 @@ public partial class ConfigurationResultDialog : Window
     /// </summary>
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
+        _logger.LogConfig($"User acknowledged configuration result ({(_result.Success ? "Success" : "Failure")})");
         DialogResult = true;
         Close();
     }

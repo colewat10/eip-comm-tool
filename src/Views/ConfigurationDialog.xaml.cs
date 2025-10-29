@@ -1,5 +1,6 @@
 using System.Windows;
 using EtherNetIPTool.Models;
+using EtherNetIPTool.Services;
 using EtherNetIPTool.ViewModels;
 
 namespace EtherNetIPTool.Views;
@@ -16,11 +17,12 @@ public partial class ConfigurationDialog : Window
     /// Constructor
     /// </summary>
     /// <param name="device">Device to configure</param>
-    public ConfigurationDialog(Device device)
+    /// <param name="logger">Activity logger for dialog operations</param>
+    public ConfigurationDialog(Device device, ActivityLogger logger)
     {
         InitializeComponent();
 
-        _viewModel = new ConfigurationViewModel(device);
+        _viewModel = new ConfigurationViewModel(device, logger);
         DataContext = _viewModel;
 
         // Subscribe to ViewModel dialog result changes
