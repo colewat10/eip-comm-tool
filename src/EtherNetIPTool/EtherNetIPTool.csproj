@@ -8,7 +8,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>EtherNetIPTool</AssemblyName>
     <RootNamespace>EtherNetIPTool</RootNamespace>
-    <ApplicationIcon>Resources\Icons\app.ico</ApplicationIcon>
     <Company>EtherNet/IP Commissioning Tool</Company>
     <Product>EtherNet/IP Commissioning Tool</Product>
     <Version>1.0.0</Version>
