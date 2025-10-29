@@ -1,5 +1,6 @@
 using System.Windows;
 using EtherNetIPTool.Models;
+using EtherNetIPTool.Services;
 using EtherNetIPTool.ViewModels;
 
 namespace EtherNetIPTool.Views;
@@ -11,9 +12,20 @@ namespace EtherNetIPTool.Views;
 /// </summary>
 public partial class ConfirmationDialog : Window
 {
-    public ConfirmationDialog(Device device, DeviceConfiguration newConfig)
+    private readonly ActivityLogger _logger;
+    private readonly Device _device;
+
+    public ConfirmationDialog(Device device, DeviceConfiguration newConfig, ActivityLogger logger)
     {
         InitializeComponent();
+
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _device = device;
+
+        // Log confirmation dialog display (REQ-3.7-003)
+        _logger.LogConfig($"Showing confirmation dialog for {device.MacAddressString}");
+        _logger.LogConfig($"Current -> New: IP {device.IPAddressString} -> {newConfig.IPAddress}");
+        _logger.LogConfig($"Current -> New: Subnet {device.SubnetMaskString} -> {newConfig.SubnetMask}");
 
         // Create view model with current and new values
         var viewModel = new ConfirmationViewModel(device, newConfig);
@@ -25,6 +37,7 @@ public partial class ConfirmationDialog : Window
     /// </summary>
     private void ApplyButton_Click(object sender, RoutedEventArgs e)
     {
+        _logger.LogConfig($"User confirmed configuration changes for {_device.MacAddressString}");
         DialogResult = true;
         Close();
     }
@@ -34,6 +47,7 @@ public partial class ConfirmationDialog : Window
     /// </summary>
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
+        _logger.LogConfig($"User cancelled configuration confirmation for {_device.MacAddressString}");
         DialogResult = false;
         Close();
     }

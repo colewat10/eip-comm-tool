@@ -496,7 +496,7 @@ public class MainWindowViewModel : ViewModelBase
             _activityLogger.LogInfo($"Opening configuration dialog for device: {SelectedDevice.MacAddressString}");
 
             // REQ-3.5.1-002: Open modal configuration dialog
-            var configDialog = new Views.ConfigurationDialog(SelectedDevice)
+            var configDialog = new Views.ConfigurationDialog(SelectedDevice, _activityLogger)
             {
                 Owner = System.Windows.Application.Current.MainWindow
             };
@@ -523,7 +523,7 @@ public class MainWindowViewModel : ViewModelBase
             _activityLogger.LogInfo($"User entered new configuration: IP={newConfig.IPAddress}, Subnet={newConfig.SubnetMask}");
 
             // REQ-3.5.4-001: Display confirmation dialog showing current vs. new configuration
-            var confirmDialog = new Views.ConfirmationDialog(SelectedDevice, newConfig)
+            var confirmDialog = new Views.ConfirmationDialog(SelectedDevice, newConfig, _activityLogger)
             {
                 Owner = System.Windows.Application.Current.MainWindow
             };
@@ -682,7 +682,7 @@ public class MainWindowViewModel : ViewModelBase
             var writeService = new ConfigurationWriteService(_activityLogger);
 
             // REQ-3.5.5-006: Show progress dialog "Sending configuration... (X/Y)"
-            progressDialog = new Views.ProgressDialog
+            progressDialog = new Views.ProgressDialog(_activityLogger)
             {
                 Owner = System.Windows.Application.Current.MainWindow
             };
@@ -708,7 +708,7 @@ public class MainWindowViewModel : ViewModelBase
             progressDialog = null;
 
             // REQ-3.5.5-008: Display result dialog with success/failure details
-            var resultDialog = new Views.ConfigurationResultDialog(writeResult)
+            var resultDialog = new Views.ConfigurationResultDialog(writeResult, _activityLogger)
             {
                 Owner = System.Windows.Application.Current.MainWindow
             };

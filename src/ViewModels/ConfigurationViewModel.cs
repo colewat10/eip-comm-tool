@@ -1,6 +1,7 @@
 using System.Net;
 using System.Windows.Input;
 using EtherNetIPTool.Models;
+using EtherNetIPTool.Services;
 
 namespace EtherNetIPTool.ViewModels;
 
@@ -10,6 +11,7 @@ namespace EtherNetIPTool.ViewModels;
 public class ConfigurationViewModel : ViewModelBase
 {
     private readonly Device _device;
+    private readonly ActivityLogger _logger;
     private IPAddress? _newIPAddress;
     private IPAddress? _newSubnetMask;
     private IPAddress? _newGateway;
@@ -25,9 +27,14 @@ public class ConfigurationViewModel : ViewModelBase
     /// <summary>
     /// Constructor
     /// </summary>
-    public ConfigurationViewModel(Device device)
+    public ConfigurationViewModel(Device device, ActivityLogger logger)
     {
         _device = device ?? throw new ArgumentNullException(nameof(device));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        // Log dialog initialization (REQ-3.7-003)
+        _logger.LogConfig($"Configuration dialog opened for device: {device.MacAddressString} ({device.IPAddressString})");
+        _logger.LogConfig($"Current config: IP={device.IPAddressString}, Subnet={device.SubnetMaskString}, Gateway={device.Gateway?.ToString() ?? "None"}");
 
         // Initialize new configuration with current values
         _newIPAddress = device.IPAddress;
@@ -452,6 +459,17 @@ public class ConfigurationViewModel : ViewModelBase
     /// </summary>
     private void ApplyConfiguration()
     {
+        // Log user's configuration choices (REQ-3.7-003, audit trail per agent guidelines)
+        _logger.LogConfig($"User applied new configuration for {_device.MacAddressString}:");
+        _logger.LogConfig($"  New IP Address: {NewIPAddress}");
+        _logger.LogConfig($"  New Subnet Mask: {NewSubnetMask}");
+        if (NewGateway != null)
+            _logger.LogConfig($"  New Gateway: {NewGateway}");
+        if (!string.IsNullOrWhiteSpace(NewHostname))
+            _logger.LogConfig($"  New Hostname: {NewHostname}");
+        if (NewDnsServer != null)
+            _logger.LogConfig($"  New DNS Server: {NewDnsServer}");
+
         // Create configuration object
         Configuration = new DeviceConfiguration
         {
@@ -470,6 +488,7 @@ public class ConfigurationViewModel : ViewModelBase
     /// </summary>
     private void Cancel()
     {
+        _logger.LogConfig($"User cancelled configuration for {_device.MacAddressString}");
         Configuration = null;
         DialogResult = false;
     }
