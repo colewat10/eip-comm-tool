@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>EtherNetIPTool</AssemblyName>
+    <RootNamespace>EtherNetIPTool</RootNamespace>
+    <ApplicationIcon>Resources\Icons\app.ico</ApplicationIcon>
+    <Company>EtherNet/IP Commissioning Tool</Company>
+    <Product>EtherNet/IP Commissioning Tool</Product>
+    <Version>1.0.0</Version>
+    <Description>Windows desktop application for industrial Ethernet device commissioning and troubleshooting</Description>
+    <Copyright>Copyright © 2025</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.77" />
+    <PackageReference Include="Serilog" Version="3.1.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="Serilog.Sinks.Debug" Version="2.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\**\*" />
+  </ItemGroup>
+
+</Project>
