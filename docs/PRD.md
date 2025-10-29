@@ -97,7 +97,7 @@ REQ-3.2-005: BootP/DHCP mode shall be disabled (grayed out) if application is no
 
 3.3 Device Discovery (EtherNet/IP Mode)
 3.3.1 Discovery Protocol
-REQ-3.3.1-001: Application shall discover devices by broadcasting CIP List Identity (command 0x0063) to 255.255.255.255:44818 on selected NIC.
+REQ-3.3.1-001: Application shall discover devices by broadcasting CIP List Identity (command 0x0063) to calculated subnet broadcast address on port 44818 via selected NIC. See REQ-4.1.1-002 for broadcast address calculation.
 REQ-3.3.1-002: Discovery broadcast shall use EtherNet/IP encapsulation protocol with unconnected message format.
 REQ-3.3.1-003: Application shall wait 3 seconds for List Identity responses after each broadcast.
 REQ-3.3.1-004: Application shall parse responses to extract: IP address, MAC address (via ARP lookup), vendor ID, device type, product code, product name, serial number.
@@ -224,7 +224,32 @@ REQ-3.8.3-003: Help menu > Troubleshooting Guide shall provide flowcharts and so
 
 4. TECHNICAL SPECIFICATIONS
 4.1 EtherNet/IP Protocol
-4.1.1 List Identity (Device Discovery)
+4.1.1 Discovery Protocol Implementation
+
+REQ-4.1.1-001: Single Socket Architecture
+
+Application shall use single UDP socket with OS-assigned ephemeral
+port for device discovery, ensuring compatibility with RSLinx and
+other EtherNet/IP tools.
+
+REQ-4.1.1-002: Subnet Broadcast Only
+
+Application shall calculate subnet broadcast address from selected
+NIC's IP and subnet mask, and send ListIdentity broadcasts to subnet
+broadcast address only (e.g., 192.168.21.255), not global broadcast
+(255.255.255.255).
+
+Rationale: Subnet broadcast ensures traffic routes through correct
+network interface and respects network isolation, preventing
+discovery packets from leaking to VPN or other unintended interfaces.
+
+REQ-4.1.1-003: Known Limitation - Subnet Configuration
+
+Discovery requires selected NIC to have correct subnet mask
+configured. Devices outside the calculated subnet broadcast range
+will not be discovered. User must ensure proper network configuration.
+
+4.1.2 List Identity Packet Structure
 Packet Structure:
 
 Encapsulation Command: 0x0063 (List Identity)
@@ -252,7 +277,7 @@ Vendor ID Mapping:
 0x017F = Banner Engineering
 Unknown IDs display as hex value
 
-4.1.2 Set_Attribute_Single (Device Configuration)
+4.1.3 Set_Attribute_Single (Device Configuration)
 Message Structure:
 
 Encapsulation Command: 0x006F (SendRRData)
