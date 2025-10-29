@@ -1,0 +1,189 @@
+<Window x:Class="EtherNetIPTool.Views.ConfigurationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:EtherNetIPTool.Controls"
+        xmlns:converters="clr-namespace:EtherNetIPTool.Converters"
+        Title="Configure EtherNet/IP Device"
+        Height="400"
+        Width="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#F0F0F0"
+        FontFamily="Segoe UI"
+        FontSize="9pt"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+    </Window.Resources>
+
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <!-- Device Information box: 120px -->
+            <RowDefinition Height="120"/>
+            <!-- Spacing: 10px -->
+            <RowDefinition Height="10"/>
+            <!-- New Configuration box: 180px -->
+            <RowDefinition Height="180"/>
+            <!-- Required field note: 15px -->
+            <RowDefinition Height="15"/>
+            <!-- Spacing: 5px -->
+            <RowDefinition Height="5"/>
+            <!-- Button panel: 35px -->
+            <RowDefinition Height="35"/>
+        </Grid.RowDefinitions>
+
+        <!-- Device Information (Read-Only) - REQ-3.5.2-001 -->
+        <GroupBox Grid.Row="0" Header="Current Device Information" Padding="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- MAC Address -->
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="MAC Address:" Margin="0,2,10,2" FontWeight="Bold"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding MacAddress}" Margin="0,2"/>
+
+                <!-- Vendor -->
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Vendor:" Margin="0,2,10,2" FontWeight="Bold"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding VendorInfo}" Margin="0,2"/>
+
+                <!-- Product -->
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Product:" Margin="0,2,10,2" FontWeight="Bold"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ProductName}" Margin="0,2"/>
+
+                <!-- Current IP/Subnet -->
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Current IP:" Margin="0,2,10,2" FontWeight="Bold"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,2">
+                    <Run Text="{Binding CurrentIPAddress}"/>
+                    <Run Text=" / "/>
+                    <Run Text="{Binding CurrentSubnetMask}"/>
+                </TextBlock>
+
+                <!-- Current Gateway -->
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Current Gateway:" Margin="0,2,10,2" FontWeight="Bold"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding CurrentGateway}" Margin="0,2"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- New Configuration (Editable) - REQ-3.5.3 -->
+        <GroupBox Grid.Row="2" Header="New Configuration" Padding="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- IP Address (Required) - REQ-3.5.3-001 -->
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="IP Address: *" Margin="0,5,10,2" FontWeight="Bold" VerticalAlignment="Center"/>
+                <controls:IpOctetInput Grid.Row="0" Grid.Column="1"
+                                       IPAddress="{Binding NewIPAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                       Margin="0,5,0,2"/>
+                <TextBlock Grid.Row="1" Grid.Column="1"
+                           Text="{Binding IPAddressError}"
+                           Foreground="Red"
+                           FontSize="8pt"
+                           Margin="0,0,0,3"
+                           Visibility="{Binding IPAddressError, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+                <!-- Subnet Mask (Required) - REQ-3.5.3-001 -->
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Subnet Mask: *" Margin="0,5,10,2" FontWeight="Bold" VerticalAlignment="Center"/>
+                <controls:IpOctetInput Grid.Row="2" Grid.Column="1"
+                                       IPAddress="{Binding NewSubnetMask, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                       Margin="0,5,0,2"/>
+                <TextBlock Grid.Row="3" Grid.Column="1"
+                           Text="{Binding SubnetMaskError}"
+                           Foreground="Red"
+                           FontSize="8pt"
+                           Margin="0,0,0,3"
+                           Visibility="{Binding SubnetMaskError, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+                <!-- Gateway (Optional) - REQ-3.5.3-002 -->
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Gateway:" Margin="0,5,10,2" VerticalAlignment="Center"/>
+                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Margin="0,5,0,2">
+                    <controls:IpOctetInput IPAddress="{Binding NewGateway, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Text="(optional)" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#808080" FontStyle="Italic"/>
+                </StackPanel>
+                <TextBlock Grid.Row="5" Grid.Column="1"
+                           Text="{Binding GatewayError}"
+                           Foreground="Red"
+                           FontSize="8pt"
+                           Margin="0,0,0,3"
+                           Visibility="{Binding GatewayError, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+                <!-- Hostname (Optional) - REQ-3.5.3-002, REQ-3.5.3-004 -->
+                <TextBlock Grid.Row="6" Grid.Column="0" Text="Hostname:" Margin="0,5,10,2" VerticalAlignment="Center"/>
+                <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,5,0,2">
+                    <TextBox Text="{Binding NewHostname, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Width="200"
+                             MaxLength="64"/>
+                    <TextBlock Text="(optional, max 64 chars)" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#808080" FontStyle="Italic"/>
+                </StackPanel>
+                <TextBlock Grid.Row="7" Grid.Column="1"
+                           Text="{Binding HostnameError}"
+                           Foreground="Red"
+                           FontSize="8pt"
+                           Margin="0,0,0,3"
+                           Visibility="{Binding HostnameError, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+                <!-- DNS Server (Optional) - REQ-3.5.3-002 -->
+                <TextBlock Grid.Row="8" Grid.Column="0" Text="DNS Server:" Margin="0,5,10,2" VerticalAlignment="Center"/>
+                <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Margin="0,5,0,2">
+                    <controls:IpOctetInput IPAddress="{Binding NewDnsServer, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Text="(optional)" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#808080" FontStyle="Italic"/>
+                </StackPanel>
+                <TextBlock Grid.Row="9" Grid.Column="1"
+                           Text="{Binding DnsServerError}"
+                           Foreground="Red"
+                           FontSize="8pt"
+                           Margin="0,0,0,3"
+                           Visibility="{Binding DnsServerError, Converter={StaticResource StringToVisibilityConverter}}"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Required Field Note - REQ-5.8 -->
+        <TextBlock Grid.Row="3"
+                   Text="* Required field"
+                   FontSize="8pt"
+                   Foreground="#808080"
+                   HorizontalAlignment="Left"
+                   Margin="5,0,0,0"/>
+
+        <!-- Button Panel - REQ-3.5.3-008, REQ-5.8 -->
+        <StackPanel Grid.Row="5"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Content="Apply Configuration"
+                    Width="140"
+                    Height="28"
+                    Command="{Binding ApplyConfigurationCommand}"
+                    IsDefault="True"
+                    Margin="0,0,10,0"/>
+            <Button Content="Cancel"
+                    Width="80"
+                    Height="28"
+                    Command="{Binding CancelCommand}"
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

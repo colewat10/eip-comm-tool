@@ -1,0 +1,116 @@
+<Window x:Class="EtherNetIPTool.Views.ConfirmationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Confirm Configuration"
+        Height="300"
+        Width="400"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#F0F0F0"
+        FontFamily="Segoe UI"
+        FontSize="9pt"
+        ShowInTaskbar="False">
+
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="40"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0"
+                   Text="Confirm the following configuration changes:"
+                   FontWeight="Bold"
+                   Margin="0,0,0,10"/>
+
+        <!-- Two-Column Comparison (REQ-3.5.4-001, REQ-5.9) -->
+        <Border Grid.Row="1"
+                BorderBrush="#D0D0D0"
+                BorderThickness="1"
+                Background="White"
+                Padding="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Current Configuration Column -->
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Current Configuration" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <TextBlock Text="IP Address:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding CurrentIPAddress}" Margin="0,0,0,5"/>
+
+                    <TextBlock Text="Subnet Mask:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding CurrentSubnetMask}" Margin="0,0,0,5"/>
+
+                    <TextBlock Text="Gateway:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding CurrentGateway}" Margin="0,0,0,5"/>
+
+                    <TextBlock Text="Hostname:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding CurrentHostname}" Margin="0,0,0,5"/>
+
+                    <TextBlock Text="DNS Server:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding CurrentDnsServer}" Margin="0,0,0,5"/>
+                </StackPanel>
+
+                <!-- Arrow Separator -->
+                <TextBlock Grid.Column="1"
+                           Text="→"
+                           FontSize="18pt"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"/>
+
+                <!-- New Configuration Column -->
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="New Configuration" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <TextBlock Text="IP Address:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding NewIPAddress}" Margin="0,0,0,5" FontWeight="Bold"/>
+
+                    <TextBlock Text="Subnet Mask:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding NewSubnetMask}" Margin="0,0,0,5" FontWeight="Bold"/>
+
+                    <TextBlock Text="Gateway:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding NewGateway}" Margin="0,0,0,5" FontWeight="Bold"/>
+
+                    <TextBlock Text="Hostname:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding NewHostname}" Margin="0,0,0,5" FontWeight="Bold"/>
+
+                    <TextBlock Text="DNS Server:" FontSize="8pt" Foreground="#808080"/>
+                    <TextBlock Text="{Binding NewDnsServer}" Margin="0,0,0,5" FontWeight="Bold"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Warning Message -->
+        <TextBlock Grid.Row="2"
+                   Text="⚠ Device will be temporarily unreachable during configuration."
+                   Foreground="#FF8800"
+                   FontSize="8pt"
+                   Margin="0,10,0,0"
+                   TextWrapping="Wrap"/>
+
+        <!-- Button Panel (REQ-3.5.4-002) -->
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom">
+            <Button Content="Apply"
+                    Width="80"
+                    Height="28"
+                    Click="ApplyButton_Click"
+                    IsDefault="True"
+                    Margin="0,0,10,0"/>
+            <Button Content="Cancel"
+                    Width="80"
+                    Height="28"
+                    Click="CancelButton_Click"
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>
