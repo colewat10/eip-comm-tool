@@ -61,7 +61,6 @@
                     <ComboBox x:Name="NicComboBox"
                               ItemsSource="{Binding NetworkAdapters}"
                               SelectedItem="{Binding SelectedAdapter}"
-                              DisplayMemberPath="DisplayName"
                               Width="400"
                               VerticalAlignment="Center"
                               ToolTip="Select network adapter for device communication">
