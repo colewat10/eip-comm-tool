@@ -34,7 +34,18 @@ This is a professional industrial automation tool for commissioning EtherNet/IP 
 - Device list management with duplicate detection
 - UI integration with Scan Now and Clear List commands
 
-**Phase 3-9**: Device Table UI enhancements, Configuration Dialog, CIP Configuration Protocol, BootP/DHCP Server, Auto-Browse, Logging/Help System, Testing & Polish
+**Phase 3 - Device Table UI** ✅ Complete
+- WPF DataGrid with 7 columns (Row #, MAC, IP, Subnet, Vendor, Model, Status)
+- Column sorting with ascending/descending toggle
+- Single row selection with MVVM binding
+- Status-based row highlighting (Link-Local yellow, Conflict red)
+- Context menu (Configure, Copy MAC/IP, Ping, Refresh)
+- Double-click to configure device
+- Model column ellipsis truncation with tooltip
+- Device count display in section header
+- Row number display (1-based indexing)
+
+**Phase 4-9**: Configuration Dialog, CIP Configuration Protocol, BootP/DHCP Server, Auto-Browse, Logging/Help System, Testing & Polish
 
 ## Technology Stack
 
