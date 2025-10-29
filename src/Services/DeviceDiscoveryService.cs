@@ -323,6 +323,22 @@ public class DeviceDiscoveryService : IDisposable
     }
 
     /// <summary>
+    /// Remove a specific device from collection (REQ-3.5.5-009)
+    /// Used after successful configuration write
+    /// </summary>
+    public void RemoveDevice(Device device)
+    {
+        if (device == null)
+            return;
+
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            Devices.Remove(device);
+        });
+        _logger.LogInfo($"Device removed from list: {device.MacAddressString}");
+    }
+
+    /// <summary>
     /// Remove devices that haven't responded for N scans
     /// (REQ-3.3.2-006: Remove after 3 consecutive missed scans)
     /// </summary>

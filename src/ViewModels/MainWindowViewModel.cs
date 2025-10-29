@@ -539,20 +539,10 @@ public class MainWindowViewModel : ViewModelBase
             }
 
             _activityLogger.LogInfo("User confirmed configuration changes");
-            StatusText = "Configuration confirmed - ready for CIP write (Phase 5)";
+            StatusText = "Writing configuration to device...";
 
-            // TODO: Phase 5 - Send CIP Set_Attribute_Single commands
-            System.Windows.MessageBox.Show(
-                $"Configuration confirmed!\n\n" +
-                $"New IP: {newConfig.IPAddress}\n" +
-                $"New Subnet: {newConfig.SubnetMask}\n" +
-                $"Gateway: {newConfig.Gateway?.ToString() ?? "Not set"}\n" +
-                $"Hostname: {newConfig.Hostname ?? "Not set"}\n" +
-                $"DNS: {newConfig.DnsServer?.ToString() ?? "Not set"}\n\n" +
-                $"CIP write operations will be implemented in Phase 5.",
-                "Configuration Ready",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
+            // Phase 5: Send CIP Set_Attribute_Single commands (REQ-3.5.5)
+            WriteConfigurationToDeviceAsync(SelectedDevice, newConfig);
         }
         catch (Exception ex)
         {
@@ -675,6 +665,84 @@ public class MainWindowViewModel : ViewModelBase
         _activityLogger.LogInfo($"Refreshing device info: {SelectedDevice.MacAddressString}");
         // TODO: Send List Identity request to specific device (future enhancement)
         StatusText = "Refresh device info (coming in future phase)";
+    }
+
+    /// <summary>
+    /// Write configuration to device via CIP Set_Attribute_Single (REQ-3.5.5)
+    /// Phase 5: Sequential attribute writes with progress tracking
+    /// </summary>
+    private async void WriteConfigurationToDeviceAsync(Device device, DeviceConfiguration config)
+    {
+        Views.ProgressDialog? progressDialog = null;
+        ConfigurationWriteResult? writeResult = null;
+
+        try
+        {
+            // Create configuration write service
+            var writeService = new ConfigurationWriteService(_activityLogger);
+
+            // REQ-3.5.5-006: Show progress dialog "Sending configuration... (X/Y)"
+            progressDialog = new Views.ProgressDialog
+            {
+                Owner = System.Windows.Application.Current.MainWindow
+            };
+
+            // Subscribe to progress updates
+            writeService.ProgressUpdated += (current, total, operationName) =>
+            {
+                progressDialog.UpdateProgress(current, total, operationName);
+            };
+
+            // Show progress dialog (non-blocking)
+            progressDialog.Show();
+
+            // REQ-3.5.5-002: Sequential writes (IP → Subnet → Gateway → Hostname → DNS)
+            // REQ-3.5.5-003: Use Unconnected Send via UCMM
+            // REQ-3.5.5-004: 3-second timeout per write
+            // REQ-3.5.5-005: 100ms delay between writes
+            // REQ-3.5.5-007: Stop on first failure
+            writeResult = await writeService.WriteConfigurationAsync(device, config);
+
+            // Close progress dialog
+            progressDialog.Complete();
+            progressDialog = null;
+
+            // REQ-3.5.5-008: Display result dialog with success/failure details
+            var resultDialog = new Views.ConfigurationResultDialog(writeResult)
+            {
+                Owner = System.Windows.Application.Current.MainWindow
+            };
+            resultDialog.ShowDialog();
+
+            if (writeResult.Success)
+            {
+                // REQ-3.5.5-009: Remove device from list on successful configuration
+                _activityLogger.LogInfo($"Configuration successful. Removing device from list: {device.MacAddressString}");
+                _discoveryService?.RemoveDevice(device);
+                OnPropertyChanged(nameof(DeviceCountText));
+
+                StatusText = $"Device configured successfully and removed from list";
+            }
+            else
+            {
+                _activityLogger.LogWarning($"Configuration failed: {writeResult.GetFirstErrorMessage()}");
+                StatusText = $"Configuration failed: {writeResult.GetFirstErrorMessage()}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"Configuration write error: {ex.Message}", ex);
+            StatusText = $"Configuration write error: {ex.Message}";
+
+            // Close progress dialog if still open
+            progressDialog?.Complete();
+
+            System.Windows.MessageBox.Show(
+                $"Failed to write configuration:\n\n{ex.Message}",
+                "Configuration Write Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
     }
 
     #endregion
