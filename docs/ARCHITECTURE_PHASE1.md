@@ -146,7 +146,7 @@ eip-comm-tool/
 
 ### 4.1 Application Entry Point
 
-**File**: `src/EtherNetIPTool/App.xaml.cs`
+**File**: `src/App.xaml.cs`
 
 The `App` class manages application lifecycle and initializes core services.
 
@@ -177,9 +177,9 @@ Log.Logger = new LoggerConfiguration()
 ### 4.2 Main Window
 
 **Files**:
-- `src/EtherNetIPTool/Views/MainWindow.xaml` (UI definition)
-- `src/EtherNetIPTool/Views/MainWindow.xaml.cs` (code-behind)
-- `src/EtherNetIPTool/ViewModels/MainWindowViewModel.cs` (logic)
+- `src/Views/MainWindow.xaml` (UI definition)
+- `src/Views/MainWindow.xaml.cs` (code-behind)
+- `src/ViewModels/MainWindowViewModel.cs` (logic)
 
 **UI Specifications (from PRD REQ-5.1):**
 - Fixed size: 1280 x 768 pixels
@@ -221,7 +221,7 @@ Log.Logger = new LoggerConfiguration()
 
 ### 5.1 ActivityLogger
 
-**File**: `src/EtherNetIPTool/Services/ActivityLogger.cs`
+**File**: `src/Services/ActivityLogger.cs`
 
 Provides structured logging with categorization for UI display and export.
 
@@ -265,7 +265,7 @@ HH:mm:ss.fff [CATEGORY] Message text
 
 ### 5.2 NetworkInterfaceService
 
-**File**: `src/EtherNetIPTool/Services/NetworkInterfaceService.cs`
+**File**: `src/Services/NetworkInterfaceService.cs`
 
 Enumerates and manages network interface adapters.
 
@@ -308,7 +308,7 @@ var selected = service.AutoSelectAdapter();  // Returns first suitable adapter
 
 ### 5.3 PrivilegeDetectionService
 
-**File**: `src/EtherNetIPTool/Services/PrivilegeDetectionService.cs`
+**File**: `src/Services/PrivilegeDetectionService.cs`
 
 Detects if application is running with Administrator privileges.
 
@@ -341,7 +341,7 @@ public bool IsRunningAsAdministrator()
 
 ### 5.4 ApplicationSettingsService
 
-**File**: `src/EtherNetIPTool/Services/ApplicationSettingsService.cs`
+**File**: `src/Services/ApplicationSettingsService.cs`
 
 Manages application configuration persistence.
 
@@ -405,7 +405,7 @@ service.SaveSettings();                    // Persist to disk
 
 ### 6.1 ViewModelBase
 
-**File**: `src/EtherNetIPTool/ViewModels/ViewModelBase.cs`
+**File**: `src/ViewModels/ViewModelBase.cs`
 
 Base class for all ViewModels implementing `INotifyPropertyChanged`.
 
@@ -438,7 +438,7 @@ public string StatusText
 
 ### 6.2 RelayCommand
 
-**File**: `src/EtherNetIPTool/ViewModels/RelayCommand.cs`
+**File**: `src/ViewModels/RelayCommand.cs`
 
 Implements `ICommand` for MVVM command binding.
 
@@ -469,7 +469,7 @@ ScanDevicesCommand = new AsyncRelayCommand(
 
 ### 6.3 MainWindowViewModel
 
-**File**: `src/EtherNetIPTool/ViewModels/MainWindowViewModel.cs`
+**File**: `src/ViewModels/MainWindowViewModel.cs`
 
 Primary ViewModel for main application window.
 
@@ -513,7 +513,7 @@ public ICommand ShowAboutCommand { get; }
 
 ### 7.1 Color Scheme
 
-**File**: `src/EtherNetIPTool/Resources/Styles/Colors.xaml`
+**File**: `src/Resources/Styles/Colors.xaml`
 
 Industrial-grade color palette (from PRD REQ-5.1):
 
@@ -645,7 +645,7 @@ Industrial-grade color palette (from PRD REQ-5.1):
 
 **Framework**: xUnit with Moq and FluentAssertions
 
-**Test Project**: `tests/EtherNetIPTool.Tests/EtherNetIPTool.Tests.csproj`
+**Test Project**: `tests/EtherNetIPTool.Tests.csproj`
 
 **Dependencies:**
 ```xml
@@ -818,32 +818,32 @@ _logger.LogInfo("Something happened");
 
 ### Core Application Files
 - `EtherNetIPTool.sln` - Solution file
-- `src/EtherNetIPTool/EtherNetIPTool.csproj` - Project file
-- `src/EtherNetIPTool/App.xaml` - Application definition
-- `src/EtherNetIPTool/App.xaml.cs` - Application entry point
+- `src/EtherNetIPTool.csproj` - Project file
+- `src/App.xaml` - Application definition
+- `src/App.xaml.cs` - Application entry point
 
 ### Services (Phase 1 Complete)
-- `src/EtherNetIPTool/Services/ActivityLogger.cs`
-- `src/EtherNetIPTool/Services/NetworkInterfaceService.cs`
-- `src/EtherNetIPTool/Services/PrivilegeDetectionService.cs`
-- `src/EtherNetIPTool/Services/ApplicationSettingsService.cs`
+- `src/Services/ActivityLogger.cs`
+- `src/Services/NetworkInterfaceService.cs`
+- `src/Services/PrivilegeDetectionService.cs`
+- `src/Services/ApplicationSettingsService.cs`
 
 ### MVVM Infrastructure
-- `src/EtherNetIPTool/ViewModels/ViewModelBase.cs`
-- `src/EtherNetIPTool/ViewModels/RelayCommand.cs`
-- `src/EtherNetIPTool/ViewModels/MainWindowViewModel.cs`
+- `src/ViewModels/ViewModelBase.cs`
+- `src/ViewModels/RelayCommand.cs`
+- `src/ViewModels/MainWindowViewModel.cs`
 
 ### Views
-- `src/EtherNetIPTool/Views/MainWindow.xaml`
-- `src/EtherNetIPTool/Views/MainWindow.xaml.cs`
+- `src/Views/MainWindow.xaml`
+- `src/Views/MainWindow.xaml.cs`
 
 ### Resources
-- `src/EtherNetIPTool/Resources/Styles/Colors.xaml`
-- `src/EtherNetIPTool/Resources/Styles/Buttons.xaml`
-- `src/EtherNetIPTool/Resources/Styles/TextBoxes.xaml`
+- `src/Resources/Styles/Colors.xaml`
+- `src/Resources/Styles/Buttons.xaml`
+- `src/Resources/Styles/TextBoxes.xaml`
 
 ### Tests
-- `tests/EtherNetIPTool.Tests/EtherNetIPTool.Tests.csproj`
+- `tests/EtherNetIPTool.Tests.csproj`
 
 ### Documentation
 - `docs/PRD.md` - Product Requirements Document

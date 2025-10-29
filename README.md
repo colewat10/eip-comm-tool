@@ -48,25 +48,33 @@ This is a professional industrial automation tool for commissioning EtherNet/IP 
 
 ```
 eip-comm-tool/
-├── src/
-│   └── EtherNetIPTool/           # Main application project
-│       ├── Core/                  # Protocol implementations
-│       ├── Models/                # Data models
-│       ├── ViewModels/            # MVVM ViewModels
-│       ├── Views/                 # WPF Views (XAML)
-│       ├── Services/              # Service layer
-│       └── Resources/             # Icons, help files, styles
-├── tests/
-│   └── EtherNetIPTool.Tests/     # Unit tests
-├── scripts/
+├── src/                           # Main application source
+│   ├── Core/                      # Protocol implementations
+│   │   ├── CIP/                   # CIP protocol (encapsulation, messages)
+│   │   └── Network/               # Network layer (sockets)
+│   ├── Models/                    # Data models (Device, etc.)
+│   ├── ViewModels/                # MVVM ViewModels
+│   ├── Views/                     # WPF Views (XAML)
+│   ├── Services/                  # Service layer (discovery, logging, settings)
+│   ├── Resources/                 # Icons, help files, styles
+│   ├── App.xaml                   # Application definition
+│   ├── App.xaml.cs                # Application entry point
+│   └── EtherNetIPTool.csproj     # Project file
+├── tests/                         # Unit tests
+│   └── EtherNetIPTool.Tests.csproj
+├── scripts/                       # Utility scripts
 │   └── Configure-FirewallForEtherNetIP.ps1  # Windows Firewall setup
-├── docs/
+├── docs/                          # Documentation
 │   ├── PRD.md                     # Product Requirements Document
 │   ├── TROUBLESHOOTING.md         # Troubleshooting guide
 │   └── ARCHITECTURE_PHASE1.md    # Phase 1 Architecture Documentation
 ├── agents/                        # AI agent profiles
 └── EtherNetIPTool.sln            # Visual Studio solution
 ```
+
+**Note:** This is a single-project solution with a flattened structure for simplicity.
+The `src/` directory contains all application code directly, without an intermediate
+project folder. This reduces path nesting and improves navigation.
 
 ## Getting Started
 
@@ -90,7 +98,7 @@ dotnet restore
 dotnet build
 
 # Run the application
-dotnet run --project src/EtherNetIPTool/EtherNetIPTool.csproj
+dotnet run --project src/EtherNetIPTool.csproj
 ```
 
 ### Running Tests
