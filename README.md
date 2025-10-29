@@ -57,7 +57,20 @@ This is a professional industrial automation tool for commissioning EtherNet/IP 
 - Confirmation dialog (400x300px) showing current vs. new configuration
 - Complete dialog flow with logging and status updates
 
-**Phase 5-9**: CIP Configuration Protocol, BootP/DHCP Server, Auto-Browse, Logging/Help System, Testing & Polish
+**Phase 5 - CIP Configuration Protocol** ✅ Complete
+- CIP Set_Attribute_Single message builder (Service 0x10)
+- Unconnected Send wrapper (Service 0x52 via UCMM)
+- TCP/IP Interface Object attribute writes (Class 0xF5, Instance 1)
+- Sequential attribute writes (IP → Subnet → Gateway → Hostname → DNS)
+- 3-second timeout per write operation
+- 100ms inter-message delay between writes
+- Progress dialog with "Sending configuration... (X/Y)" indicator
+- Stop on first failure behavior
+- Result dialog with success/failure details for each attribute
+- CIP error code translation to human-readable messages
+- Device removal from list after successful configuration
+
+**Phase 6-9**: BootP/DHCP Server, Auto-Browse, Logging/Help System, Testing & Polish
 
 ## Technology Stack
 
@@ -166,6 +179,9 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for detailed troubleshoot
 - **[Product Requirements Document (PRD)](docs/PRD.md)**: Complete functional and technical specifications
 - **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)**: Device discovery troubleshooting and diagnostics
 - **[Phase 1 Architecture Documentation](docs/ARCHITECTURE_PHASE1.md)**: Detailed architecture and implementation guide
+- **[Phase 3 Implementation Guide](docs/PHASE3_IMPLEMENTATION.md)**: Device Table UI implementation details
+- **[Phase 4 Implementation Guide](docs/PHASE4_IMPLEMENTATION.md)**: Configuration Dialog implementation details
+- **[Phase 5 Implementation Guide](docs/PHASE5_IMPLEMENTATION.md)**: CIP Configuration Protocol implementation details
 - **[Agent Profiles](agents/)**: AI development agent specifications
 
 ## Development Approach
@@ -190,7 +206,7 @@ All development strictly follows the PRD and agent profiles to ensure profession
 
 ## Roadmap
 
-### Current Status: Phase 2 Complete ✅
+### Current Status: Phase 5 Complete ✅
 
 **Phase 1 - Core Infrastructure:**
 - [x] Project structure and build system
@@ -213,13 +229,37 @@ All development strictly follows the PRD and agent profiles to ensure profession
 - [x] ViewModel integration and UI bindings
 - [x] Functional device scanning and display
 
-### Next: Phase 3 - Device Table UI Enhancements
+**Phase 3 - Device Table UI:**
+- [x] WPF DataGrid with 7 columns
+- [x] Row selection handling
+- [x] Status-based row coloring (Link-Local yellow, Conflict red)
+- [x] Context menu (Configure, Copy MAC/IP, Ping, Refresh)
+- [x] Column sorting functionality
+- [x] Double-click to configure
 
-- [ ] Row selection handling
-- [ ] Status-based row coloring (Link-Local yellow, Conflict red)
-- [ ] Context menu (Configure, Copy MAC/IP, Ping, Refresh)
-- [ ] Column sorting functionality
-- [ ] Double-click to configure
+**Phase 4 - Configuration Dialog:**
+- [x] Modal configuration dialog with validation
+- [x] Custom IP octet input control
+- [x] Required/optional field handling
+- [x] Real-time validation with error messages
+- [x] Hostname and subnet validation
+- [x] Confirmation dialog with current vs. new comparison
+
+**Phase 5 - CIP Configuration Protocol:**
+- [x] CIP Set_Attribute_Single message builder
+- [x] Unconnected Send wrapper
+- [x] TCP/IP Interface Object attribute writes
+- [x] Sequential write service with progress tracking
+- [x] Progress dialog with percentage indicator
+- [x] Result dialog with success/failure details
+- [x] CIP error code translation
+- [x] Device removal on successful configuration
+
+### Next: Phase 6 - BootP/DHCP Server
+
+- [ ] BootP/DHCP server implementation
+- [ ] DHCP mode discovery and configuration
+- [ ] Automatic mode detection and switching
 
 ## License
 
@@ -228,5 +268,5 @@ See [LICENSE](LICENSE) file for details.
 ---
 
 **Version**: 1.0.0-alpha
-**Status**: Phase 2 Complete - EtherNet/IP Discovery
+**Status**: Phase 5 Complete - CIP Configuration Protocol
 **Last Updated**: 2025-10-29
