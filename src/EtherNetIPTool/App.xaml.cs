@@ -18,21 +18,40 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // Initialize logging service
-        InitializeLogging();
+        try
+        {
+            // Initialize logging service
+            InitializeLogging();
 
-        _logger?.Information("========================================");
-        _logger?.Information("EtherNet/IP Commissioning Tool Starting");
-        _logger?.Information("Version: {Version}", GetType().Assembly.GetName().Version);
-        _logger?.Information("========================================");
+            _logger?.Information("========================================");
+            _logger?.Information("EtherNet/IP Commissioning Tool Starting");
+            _logger?.Information("Version: {Version}", GetType().Assembly.GetName().Version);
+            _logger?.Information("========================================");
 
-        // Check privilege level
-        var privilegeService = new PrivilegeDetectionService();
-        var isAdmin = privilegeService.IsRunningAsAdministrator();
-        _logger?.Information("Running as Administrator: {IsAdmin}", isAdmin);
+            // Check privilege level
+            var privilegeService = new PrivilegeDetectionService();
+            var isAdmin = privilegeService.IsRunningAsAdministrator();
+            _logger?.Information("Running as Administrator: {IsAdmin}", isAdmin);
 
-        // Log system information
-        LogSystemInformation();
+            // Log system information
+            LogSystemInformation();
+
+            // Create and show main window after initialization
+            _logger?.Information("Creating main window...");
+            var mainWindow = new Views.MainWindow();
+            mainWindow.Show();
+            _logger?.Information("Main window created and shown successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error(ex, "Fatal error during application startup");
+            MessageBox.Show(
+                $"Fatal error during startup:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                "EtherNet/IP Commissioning Tool - Startup Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(1);
+        }
     }
 
     /// <summary>
@@ -69,11 +88,15 @@ public partial class App : Application
     /// </summary>
     private void InitializeLogging()
     {
-        var logPath = System.IO.Path.Combine(
+        var logDirectory = System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "EtherNetIPTool",
-            "Logs",
-            $"app-{DateTime.Now:yyyyMMdd}.log");
+            "Logs");
+
+        // Ensure log directory exists
+        System.IO.Directory.CreateDirectory(logDirectory);
+
+        var logPath = System.IO.Path.Combine(logDirectory, $"app-{DateTime.Now:yyyyMMdd}.log");
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
