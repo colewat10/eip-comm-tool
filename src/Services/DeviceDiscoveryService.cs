@@ -218,6 +218,8 @@ public class DeviceDiscoveryService : IDisposable
             // Add new device to collection (on UI thread)
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
+                // Set discovery sequence for sorting (REQ-3.4-003, REQ-3.4-004)
+                device.DiscoverySequence = Devices.Count + 1;
                 Devices.Add(device);
             });
 
