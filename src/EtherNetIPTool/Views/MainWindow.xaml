@@ -179,9 +179,11 @@
                         <Button Content="Scan Now"
                                 Width="80"
                                 Margin="0,0,10,0"
+                                Command="{Binding ScanNowCommand}"
                                 ToolTip="Perform immediate device scan"/>
                         <Button Content="Clear List"
                                 Width="80"
+                                Command="{Binding ClearDeviceListCommand}"
                                 ToolTip="Clear all devices from table"/>
                     </StackPanel>
                 </Grid>
@@ -193,7 +195,7 @@
                     BorderBrush="#D0D0D0"
                     BorderThickness="1,1,1,0"
                     Height="20">
-                <TextBlock Text="0 device(s)"
+                <TextBlock Text="{Binding DeviceCountText}"
                            Margin="5,0"
                            VerticalAlignment="Center"
                            FontWeight="Bold"
@@ -205,6 +207,7 @@
                     BorderBrush="#D0D0D0"
                     BorderThickness="1,0,1,1">
                 <DataGrid x:Name="DeviceTable"
+                          ItemsSource="{Binding Devices}"
                           AutoGenerateColumns="False"
                           HeadersVisibility="Column"
                           RowHeight="20"
@@ -217,13 +220,33 @@
                           SelectionMode="Single"
                           FontSize="9pt">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="#" Width="30" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="MAC Address" Width="140" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="IP Address" Width="120" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Subnet Mask" Width="120" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Vendor" Width="80" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Model" Width="200" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Status" Width="80" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="#"
+                                            Width="30"
+                                            IsReadOnly="True"/>
+                        <DataGridTextColumn Header="MAC Address"
+                                            Width="140"
+                                            Binding="{Binding MacAddressString}"
+                                            IsReadOnly="True"/>
+                        <DataGridTextColumn Header="IP Address"
+                                            Width="120"
+                                            Binding="{Binding IPAddressString}"
+                                            IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Subnet Mask"
+                                            Width="120"
+                                            Binding="{Binding SubnetMaskString}"
+                                            IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Vendor"
+                                            Width="150"
+                                            Binding="{Binding VendorName}"
+                                            IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Model"
+                                            Width="200"
+                                            Binding="{Binding ProductName}"
+                                            IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Status"
+                                            Width="80"
+                                            Binding="{Binding StatusText}"
+                                            IsReadOnly="True"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </Border>
