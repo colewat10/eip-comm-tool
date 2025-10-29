@@ -63,30 +63,32 @@ public class DeviceDiscoveryService : IDisposable
         {
             _logger.LogScan($"Starting device scan on {_networkAdapter.Name} ({_networkAdapter.IPAddress})");
 
+            // REQ-4.1.1-003: Subnet mask is required for discovery
+            if (_networkAdapter.SubnetMask == null)
+            {
+                _logger.LogError("Cannot perform discovery: Network adapter subnet mask not configured");
+                _logger.LogInfo("Please ensure the selected network adapter has a valid subnet mask configured");
+                return 0;
+            }
+
+            // Calculate subnet broadcast address (REQ-4.1.1-002)
+            var subnetBroadcast = CalculateSubnetBroadcast(_networkAdapter.IPAddress!, _networkAdapter.SubnetMask);
+            if (subnetBroadcast == null)
+            {
+                _logger.LogError("Failed to calculate subnet broadcast address");
+                return 0;
+            }
+
             // Ensure socket is open
             if (_socket == null)
             {
                 _socket = new EtherNetIPSocket(_networkAdapter.IPAddress!);
                 _socket.Open();
 
-                // Log dual-socket binding details for diagnostics
-                var mainPort = _socket.LocalPort;
-                var has44818 = _socket.Has44818Listener;
-
-                _logger.LogInfo($"Opened primary UDP socket on {_networkAdapter.IPAddress}:{mainPort}");
-
-                if (has44818)
-                {
-                    _logger.LogInfo("✓ Secondary listener on port 44818 active (Turck-style devices supported)");
-                    _logger.LogInfo("✓ Dual-socket mode: Compatible with both Rockwell and Turck devices");
-                }
-                else
-                {
-                    _logger.LogWarning("⚠ Port 44818 is in use (likely RSLinx or another tool)");
-                    _logger.LogInfo("  Single-socket mode: Rockwell-style devices supported");
-                    _logger.LogInfo("  Turck-style devices may not respond (they send to port 44818)");
-                    _logger.LogInfo("  TIP: Close RSLinx/other tools before scanning to enable dual-socket mode");
-                }
+                // REQ-4.1.1-001: Log single-socket architecture details
+                var ephemeralPort = _socket.LocalPort;
+                _logger.LogInfo($"Opened UDP socket on {_networkAdapter.IPAddress}:{ephemeralPort} (ephemeral port)");
+                _logger.LogInfo($"Socket architecture: Single-socket with OS-assigned port for RSLinx compatibility");
             }
 
             // Build List Identity request packet (REQ-3.3.1-001, REQ-3.3.1-002)
@@ -94,22 +96,10 @@ public class DeviceDiscoveryService : IDisposable
             _logger.LogCIP($"Built List Identity request packet ({requestPacket.Length} bytes)");
             _logger.LogCIP($"Packet hex: {BitConverter.ToString(requestPacket)}");
 
-            // Send broadcast (REQ-3.3.1-001)
-            // Try both 255.255.255.255 and subnet-directed broadcast
-            // Some switches block 255.255.255.255 but allow subnet broadcasts
-            _socket.SendBroadcast(requestPacket);
-            _logger.LogScan($"Sent List Identity broadcast to 255.255.255.255:44818");
-
-            // Also send subnet-directed broadcast if we have subnet mask
-            if (_networkAdapter.SubnetMask != null)
-            {
-                var subnetBroadcast = CalculateSubnetBroadcast(_networkAdapter.IPAddress!, _networkAdapter.SubnetMask);
-                if (subnetBroadcast != null && !subnetBroadcast.Equals(IPAddress.Broadcast))
-                {
-                    _socket.SendUnicast(requestPacket, subnetBroadcast);
-                    _logger.LogScan($"Sent List Identity subnet broadcast to {subnetBroadcast}:44818");
-                }
-            }
+            // REQ-4.1.1-002: Send ONLY to subnet broadcast (not global broadcast)
+            _socket.SendSubnetBroadcast(requestPacket, subnetBroadcast);
+            _logger.LogScan($"Sent List Identity broadcast to subnet {subnetBroadcast}:44818");
+            _logger.LogInfo($"Broadcast scope: Subnet only (per REQ-4.1.1-002)");
 
             _logger.LogScan($"Listening for responses for 3 seconds...");
 
@@ -123,7 +113,7 @@ public class DeviceDiscoveryService : IDisposable
                 _logger.LogInfo($"  Response source: {source.Address}:{source.Port} ({data.Length} bytes)");
             }
 
-            // Filter out our own broadcast echo (we receive our own packet when bound to 44818)
+            // Filter out our own broadcast echo (may occur with some network configurations)
             var validResponses = responses.Where(r => !r.Source.Address.Equals(_networkAdapter.IPAddress)).ToList();
             var selfResponses = responses.Count - validResponses.Count;
 
@@ -136,13 +126,14 @@ public class DeviceDiscoveryService : IDisposable
 
             if (validResponses.Count == 0)
             {
-                _logger.LogWarning("No devices responded to List Identity broadcast");
+                _logger.LogWarning("No devices responded to subnet broadcast");
                 _logger.LogInfo("Possible causes:");
-                _logger.LogInfo("  1. No EtherNet/IP devices on network");
+                _logger.LogInfo("  1. No EtherNet/IP devices on this subnet");
                 _logger.LogInfo("  2. Windows Firewall blocking UDP port 44818");
                 _logger.LogInfo("  3. Devices have EtherNet/IP disabled");
                 _logger.LogInfo("  4. Wrong network adapter selected");
-                _logger.LogInfo("  5. Devices on different subnet (broadcast doesn't cross subnets)");
+                _logger.LogInfo($"  5. Devices outside subnet range (broadcast sent to {subnetBroadcast})");
+                _logger.LogInfo("  6. Network switch blocking subnet broadcast traffic");
             }
 
             // Parse each valid response (REQ-3.3.1-004)
