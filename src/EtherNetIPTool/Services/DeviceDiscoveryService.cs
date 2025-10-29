@@ -74,18 +74,33 @@ public class DeviceDiscoveryService : IDisposable
             // Build List Identity request packet (REQ-3.3.1-001, REQ-3.3.1-002)
             var requestPacket = ListIdentityMessage.BuildRequest();
             _logger.LogCIP($"Built List Identity request packet ({requestPacket.Length} bytes)");
+            _logger.LogCIP($"Packet hex: {BitConverter.ToString(requestPacket)}");
 
             // Send broadcast (REQ-3.3.1-001)
             _socket.SendBroadcast(requestPacket);
             _logger.LogScan($"Sent List Identity broadcast to 255.255.255.255:44818");
+            _logger.LogScan($"Listening for responses for 3 seconds...");
 
             // Receive all responses within timeout (REQ-3.3.1-003: 3 seconds)
             var responses = await _socket.ReceiveAllResponsesAsync(cancellationToken);
             _logger.LogScan($"Received {responses.Count} response(s)");
 
+            if (responses.Count == 0)
+            {
+                _logger.LogWarning("No devices responded to List Identity broadcast");
+                _logger.LogInfo("Possible causes:");
+                _logger.LogInfo("  1. No EtherNet/IP devices on network");
+                _logger.LogInfo("  2. Windows Firewall blocking UDP port 44818");
+                _logger.LogInfo("  3. Devices have EtherNet/IP disabled");
+                _logger.LogInfo("  4. Wrong network adapter selected");
+            }
+
             // Parse each response (REQ-3.3.1-004)
             foreach (var (data, source) in responses)
             {
+                _logger.LogCIP($"Response from {source.Address}: {data.Length} bytes");
+                _logger.LogCIP($"Response hex (first 64 bytes): {BitConverter.ToString(data, 0, Math.Min(64, data.Length))}");
+
                 var device = ListIdentityMessage.ParseResponse(data, data.Length);
 
                 if (device != null)
