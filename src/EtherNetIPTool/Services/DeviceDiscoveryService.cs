@@ -69,17 +69,23 @@ public class DeviceDiscoveryService : IDisposable
                 _socket = new EtherNetIPSocket(_networkAdapter.IPAddress!);
                 _socket.Open();
 
-                // Log socket binding details for diagnostics
-                var boundPort = _socket.LocalPort;
-                _logger.LogInfo($"Opened UDP socket on {_networkAdapter.IPAddress}:{boundPort}");
+                // Log dual-socket binding details for diagnostics
+                var mainPort = _socket.LocalPort;
+                var has44818 = _socket.Has44818Listener;
 
-                if (boundPort == 44818)
+                _logger.LogInfo($"Opened primary UDP socket on {_networkAdapter.IPAddress}:{mainPort}");
+
+                if (has44818)
                 {
-                    _logger.LogInfo("Successfully bound to port 44818 (optimal for device discovery)");
+                    _logger.LogInfo("✓ Secondary listener on port 44818 active (Turck-style devices supported)");
+                    _logger.LogInfo("✓ Dual-socket mode: Compatible with both Rockwell and Turck devices");
                 }
                 else
                 {
-                    _logger.LogWarning($"Bound to ephemeral port {boundPort} (port 44818 in use). Some devices may not respond.");
+                    _logger.LogWarning("⚠ Port 44818 is in use (likely RSLinx or another tool)");
+                    _logger.LogInfo("  Single-socket mode: Rockwell-style devices supported");
+                    _logger.LogInfo("  Turck-style devices may not respond (they send to port 44818)");
+                    _logger.LogInfo("  TIP: Close RSLinx/other tools before scanning to enable dual-socket mode");
                 }
             }
 

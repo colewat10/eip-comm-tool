@@ -10,7 +10,8 @@ namespace EtherNetIPTool.Core.Network;
 /// </summary>
 public class EtherNetIPSocket : IDisposable
 {
-    private UdpClient? _udpClient;
+    private UdpClient? _mainClient;        // Primary socket (ephemeral port, always works)
+    private UdpClient? _port44818Client;   // Secondary socket (port 44818, if available)
     private readonly IPAddress _localIP;
     private bool _disposed;
 
@@ -25,9 +26,14 @@ public class EtherNetIPSocket : IDisposable
     public const int DefaultDiscoveryTimeout = 3000;
 
     /// <summary>
-    /// Get the local port the socket is bound to (0 if not open)
+    /// Get the local port the main socket is bound to (0 if not open)
     /// </summary>
-    public int LocalPort => (_udpClient?.Client?.LocalEndPoint as IPEndPoint)?.Port ?? 0;
+    public int LocalPort => (_mainClient?.Client?.LocalEndPoint as IPEndPoint)?.Port ?? 0;
+
+    /// <summary>
+    /// Check if secondary 44818 listener is active
+    /// </summary>
+    public bool Has44818Listener => _port44818Client != null;
 
     /// <summary>
     /// Create a new EtherNet/IP socket bound to specific network adapter
@@ -39,22 +45,30 @@ public class EtherNetIPSocket : IDisposable
     }
 
     /// <summary>
-    /// Open the UDP socket for broadcast communication
-    /// Attempts to bind to port 44818 first (some devices send responses there),
-    /// falls back to ephemeral port if 44818 is unavailable
+    /// Open UDP sockets for broadcast communication using dual-socket architecture
+    ///
+    /// Primary socket: Always binds to ephemeral port (guaranteed to work)
+    /// - Used for sending broadcasts
+    /// - Receives responses from Rockwell-style devices (reply to source port)
+    ///
+    /// Secondary socket: Attempts to bind to port 44818 for listening
+    /// - Optional - only if port 44818 is available
+    /// - Receives responses from Turck-style devices (reply to port 44818)
+    ///
+    /// This dual-socket approach ensures compatibility with both device types
+    /// regardless of whether RSLinx or other tools are using port 44818.
     /// </summary>
-    /// <exception cref="SocketException">If socket cannot be created or bound</exception>
+    /// <exception cref="SocketException">If primary socket cannot be created</exception>
     public void Open()
     {
-        if (_udpClient != null)
+        if (_mainClient != null)
             return; // Already open
 
-        // Try to bind to port 44818 first - some EtherNet/IP devices (Turck, etc.)
-        // send responses specifically to port 44818 rather than the source port
         try
         {
-            var localEndPoint = new IPEndPoint(_localIP, EtherNetIPPort);
-            _udpClient = new UdpClient(localEndPoint)
+            // 1. ALWAYS create primary socket on ephemeral port (guaranteed to work)
+            var ephemeralEndPoint = new IPEndPoint(_localIP, 0);
+            _mainClient = new UdpClient(ephemeralEndPoint)
             {
                 EnableBroadcast = true,
                 Client =
@@ -64,41 +78,38 @@ public class EtherNetIPSocket : IDisposable
                 }
             };
 
-            // Successfully bound to port 44818
-            return;
-        }
-        catch (SocketException)
-        {
-            // Port 44818 in use, try ephemeral port
-            _udpClient = null;
-        }
-
-        // Fallback: Use ephemeral port (standard approach)
-        try
-        {
-            var localEndPoint = new IPEndPoint(_localIP, 0); // Use ephemeral port
-            _udpClient = new UdpClient(localEndPoint)
+            // 2. ALSO TRY to create secondary listener on port 44818
+            // This is optional - gracefully degrades if 44818 is busy (e.g., RSLinx)
+            try
             {
-                // Enable broadcast (REQ-4.3.3)
-                EnableBroadcast = true,
-
-                // Set receive timeout (REQ-4.3.4)
-                Client =
+                var port44818EndPoint = new IPEndPoint(_localIP, EtherNetIPPort);
+                _port44818Client = new UdpClient(port44818EndPoint)
                 {
-                    ReceiveTimeout = DefaultDiscoveryTimeout,
-                    SendTimeout = 5000
-                }
-            };
+                    EnableBroadcast = true,
+                    Client =
+                    {
+                        ReceiveTimeout = DefaultDiscoveryTimeout,
+                        SendTimeout = 5000
+                    }
+                };
+            }
+            catch (SocketException)
+            {
+                // Port 44818 is in use (likely RSLinx or another tool)
+                // This is not an error - we still have the ephemeral socket
+                _port44818Client = null;
+            }
         }
         catch (SocketException ex)
         {
             throw new SocketException((int)ex.SocketErrorCode,
-                $"Failed to create UDP socket on {_localIP}: {ex.Message}");
+                $"Failed to create primary UDP socket on {_localIP}: {ex.Message}");
         }
     }
 
     /// <summary>
     /// Send List Identity broadcast to discover devices
+    /// Sends from primary (ephemeral) socket
     /// (REQ-3.3.1-001)
     /// </summary>
     /// <param name="packet">List Identity request packet</param>
@@ -106,14 +117,15 @@ public class EtherNetIPSocket : IDisposable
     /// <exception cref="SocketException">If send fails</exception>
     public void SendBroadcast(byte[] packet)
     {
-        if (_udpClient == null)
+        if (_mainClient == null)
             throw new InvalidOperationException("Socket not open. Call Open() first.");
 
         try
         {
             // Broadcast to 255.255.255.255:44818 (REQ-3.3.1-001)
+            // Send from primary socket (ephemeral port)
             var broadcastEndPoint = new IPEndPoint(IPAddress.Broadcast, EtherNetIPPort);
-            _udpClient.Send(packet, packet.Length, broadcastEndPoint);
+            _mainClient.Send(packet, packet.Length, broadcastEndPoint);
         }
         catch (SocketException ex)
         {
@@ -125,6 +137,7 @@ public class EtherNetIPSocket : IDisposable
     /// <summary>
     /// Send List Identity as unicast to specific device (diagnostic/troubleshooting)
     /// Some devices may respond to unicast but not broadcast
+    /// Sends from primary (ephemeral) socket
     /// </summary>
     /// <param name="packet">List Identity request packet</param>
     /// <param name="targetIP">Target device IP address</param>
@@ -132,13 +145,13 @@ public class EtherNetIPSocket : IDisposable
     /// <exception cref="SocketException">If send fails</exception>
     public void SendUnicast(byte[] packet, IPAddress targetIP)
     {
-        if (_udpClient == null)
+        if (_mainClient == null)
             throw new InvalidOperationException("Socket not open. Call Open() first.");
 
         try
         {
             var targetEndPoint = new IPEndPoint(targetIP, EtherNetIPPort);
-            _udpClient.Send(packet, packet.Length, targetEndPoint);
+            _mainClient.Send(packet, packet.Length, targetEndPoint);
         }
         catch (SocketException ex)
         {
@@ -148,78 +161,78 @@ public class EtherNetIPSocket : IDisposable
     }
 
     /// <summary>
-    /// Receive response from a device
-    /// Blocks until data received or timeout occurs
+    /// Try to receive pending data from a specific socket without blocking
     /// </summary>
-    /// <param name="remoteEndPoint">Remote endpoint that sent the response</param>
-    /// <returns>Received data or null if timeout</returns>
-    /// <exception cref="InvalidOperationException">If socket not open</exception>
-    public byte[]? ReceiveResponse(out IPEndPoint? remoteEndPoint)
+    /// <param name="client">UDP client to check</param>
+    /// <param name="responses">List to add received responses to</param>
+    private void TryReceiveFrom(UdpClient? client, List<(byte[] Data, IPEndPoint Source)> responses, string socketName)
     {
-        remoteEndPoint = null;
-
-        if (_udpClient == null)
-            throw new InvalidOperationException("Socket not open. Call Open() first.");
+        if (client == null)
+            return;
 
         try
         {
-            remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-            var data = _udpClient.Receive(ref remoteEndPoint);
-            return data;
-        }
-        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
-        {
-            // Timeout is expected when no more responses
-            return null;
-        }
-        catch (SocketException ex)
-        {
-            throw new SocketException((int)ex.SocketErrorCode,
-                $"Failed to receive response: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Receive all responses within timeout period
-    /// (REQ-3.3.1-003: wait 3 seconds for responses)
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>List of received responses with source endpoints</returns>
-    public async Task<List<(byte[] Data, IPEndPoint Source)>> ReceiveAllResponsesAsync(
-        CancellationToken cancellationToken = default)
-    {
-        var responses = new List<(byte[], IPEndPoint)>();
-
-        if (_udpClient == null)
-            throw new InvalidOperationException("Socket not open. Call Open() first.");
-
-        // Calculate end time for timeout
-        var endTime = DateTime.Now.AddMilliseconds(DefaultDiscoveryTimeout);
-
-        while (DateTime.Now < endTime && !cancellationToken.IsCancellationRequested)
-        {
-            try
+            // Check if data is available without blocking
+            while (client.Available > 0)
             {
-                // Calculate remaining timeout
-                var remainingTimeout = (int)(endTime - DateTime.Now).TotalMilliseconds;
-                if (remainingTimeout <= 0)
-                    break;
-
-                _udpClient.Client.ReceiveTimeout = remainingTimeout;
-
-                // Non-blocking receive with timeout
                 var remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-                var data = await Task.Run(() => _udpClient.Receive(ref remoteEndPoint), cancellationToken);
+                var data = client.Receive(ref remoteEndPoint);
 
                 if (data != null && data.Length > 0)
                 {
                     responses.Add((data, remoteEndPoint));
                 }
             }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
+        {
+            // Expected when no data available
+        }
+        catch (SocketException)
+        {
+            // Socket may have been closed or other recoverable error
+            // Continue with other socket
+        }
+    }
+
+    /// <summary>
+    /// Receive all responses within timeout period from BOTH sockets
+    /// Merges responses from primary (ephemeral) and secondary (44818) sockets
+    /// (REQ-3.3.1-003: wait 3 seconds for responses)
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of received responses with source endpoints (duplicates removed)</returns>
+    public async Task<List<(byte[] Data, IPEndPoint Source)>> ReceiveAllResponsesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var responses = new List<(byte[] Data, IPEndPoint Source)>();
+
+        if (_mainClient == null)
+            throw new InvalidOperationException("Socket not open. Call Open() first.");
+
+        // Calculate end time for timeout
+        var endTime = DateTime.Now.AddMilliseconds(DefaultDiscoveryTimeout);
+
+        // Poll both sockets for responses
+        // Use 50ms polling interval for good responsiveness
+        const int pollingIntervalMs = 50;
+
+        while (DateTime.Now < endTime && !cancellationToken.IsCancellationRequested)
+        {
+            try
             {
-                // Timeout - no more responses
-                break;
+                // Check both sockets for available data
+                TryReceiveFrom(_mainClient, responses, "primary");
+                TryReceiveFrom(_port44818Client, responses, "port44818");
+
+                // Calculate remaining time
+                var remainingTime = (int)(endTime - DateTime.Now).TotalMilliseconds;
+                if (remainingTime <= 0)
+                    break;
+
+                // Wait briefly before next poll (or until timeout)
+                var delayMs = Math.Min(pollingIntervalMs, remainingTime);
+                await Task.Delay(delayMs, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -228,16 +241,48 @@ public class EtherNetIPSocket : IDisposable
             }
         }
 
-        return responses;
+        // Remove duplicate responses (same source IP/port and identical data)
+        // This can happen if device responds to both sockets
+        var uniqueResponses = RemoveDuplicateResponses(responses);
+
+        return uniqueResponses;
     }
 
     /// <summary>
-    /// Close the UDP socket
+    /// Remove duplicate responses based on source endpoint and data content
+    /// Keeps first occurrence of each unique response
+    /// </summary>
+    private List<(byte[] Data, IPEndPoint Source)> RemoveDuplicateResponses(
+        List<(byte[] Data, IPEndPoint Source)> responses)
+    {
+        var seen = new HashSet<string>();
+        var unique = new List<(byte[] Data, IPEndPoint Source)>();
+
+        foreach (var (data, source) in responses)
+        {
+            // Create unique key from source and data content
+            var key = $"{source.Address}:{source.Port}:{BitConverter.ToString(data)}";
+
+            if (!seen.Contains(key))
+            {
+                seen.Add(key);
+                unique.Add((data, source));
+            }
+        }
+
+        return unique;
+    }
+
+    /// <summary>
+    /// Close both UDP sockets
     /// </summary>
     public void Close()
     {
-        _udpClient?.Close();
-        _udpClient = null;
+        _mainClient?.Close();
+        _mainClient = null;
+
+        _port44818Client?.Close();
+        _port44818Client = null;
     }
 
     /// <summary>
