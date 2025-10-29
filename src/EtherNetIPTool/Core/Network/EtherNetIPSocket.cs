@@ -123,6 +123,31 @@ public class EtherNetIPSocket : IDisposable
     }
 
     /// <summary>
+    /// Send List Identity as unicast to specific device (diagnostic/troubleshooting)
+    /// Some devices may respond to unicast but not broadcast
+    /// </summary>
+    /// <param name="packet">List Identity request packet</param>
+    /// <param name="targetIP">Target device IP address</param>
+    /// <exception cref="InvalidOperationException">If socket not open</exception>
+    /// <exception cref="SocketException">If send fails</exception>
+    public void SendUnicast(byte[] packet, IPAddress targetIP)
+    {
+        if (_udpClient == null)
+            throw new InvalidOperationException("Socket not open. Call Open() first.");
+
+        try
+        {
+            var targetEndPoint = new IPEndPoint(targetIP, EtherNetIPPort);
+            _udpClient.Send(packet, packet.Length, targetEndPoint);
+        }
+        catch (SocketException ex)
+        {
+            throw new SocketException((int)ex.SocketErrorCode,
+                $"Failed to send unicast to {targetIP}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Receive response from a device
     /// Blocks until data received or timeout occurs
     /// </summary>
