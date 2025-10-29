@@ -26,7 +26,8 @@ This is a professional industrial automation tool for commissioning EtherNet/IP 
 
 **Phase 2 - EtherNet/IP Discovery** ✅ Complete
 - CIP List Identity packet builder with byte-level protocol implementation
-- UDP broadcast socket service (255.255.255.255:44818)
+- Single UDP socket with OS-assigned ephemeral port (RSLinx compatible)
+- Subnet-directed broadcast discovery (calculated per adapter, no global broadcast)
 - Device discovery with 3-second response collection
 - Response parser extracting device identity
 - Vendor ID to name mapping (70+ vendors)
@@ -75,6 +76,10 @@ eip-comm-tool/
 **Note:** This is a single-project solution with a flattened structure for simplicity.
 The `src/` directory contains all application code directly, without an intermediate
 project folder. This reduces path nesting and improves navigation.
+
+**Discovery Architecture:** Uses single-socket with subnet-only broadcast per PRD
+REQ-4.1.1-001/002. This ensures RSLinx compatibility and network isolation while
+requiring proper subnet mask configuration.
 
 ## Getting Started
 
