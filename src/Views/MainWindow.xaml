@@ -81,7 +81,10 @@
                             Height="24"
                             Margin="5,0,0,0"
                             ToolTip="Refresh network adapter list"
-                            FontSize="14pt"/>
+                            FontSize="14pt"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Padding="0"/>
 
                     <TextBlock Margin="20,0,0,0" VerticalAlignment="Center">
                         <Run Text="IP: " FontWeight="Bold"/>
@@ -157,10 +160,12 @@
                         <RadioButton Content="EtherNet/IP"
                                      IsChecked="True"
                                      Margin="0,2"
+                                     VerticalContentAlignment="Center"
                                      ToolTip="Device discovery and configuration via EtherNet/IP protocol"/>
                         <RadioButton Content="BootP/DHCP"
                                      IsEnabled="{Binding IsAdministrator}"
                                      Margin="0,2"
+                                     VerticalContentAlignment="Center"
                                      ToolTip="{Binding PrivilegeStatus}"/>
                     </StackPanel>
 
@@ -269,13 +274,13 @@
 
                     <!-- REQ-3.4-001: Column Configuration (REQ-5.5) -->
                     <DataGrid.Columns>
-                        <!-- Row number column (30px, right-aligned) -->
+                        <!-- Row number column (30px, right-aligned) - REQ-3.4-003, REQ-3.4-004 -->
                         <DataGridTextColumn Header="#"
                                             Width="30"
                                             IsReadOnly="True"
-                                            CanUserSort="False"
-                                            Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow},
-                                                      Converter={StaticResource RowNumberConverter}}">
+                                            CanUserSort="True"
+                                            Binding="{Binding DiscoverySequence}"
+                                            SortMemberPath="DiscoverySequence">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="HorizontalAlignment" Value="Right"/>

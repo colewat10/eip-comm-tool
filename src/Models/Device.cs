@@ -93,6 +93,12 @@ public class Device
     public int MissedScans { get; set; }
 
     /// <summary>
+    /// Discovery sequence number for sorting (REQ-3.4-003, REQ-3.4-004)
+    /// Represents chronological discovery order (1-based)
+    /// </summary>
+    public int DiscoverySequence { get; set; }
+
+    /// <summary>
     /// Firmware revision (major.minor)
     /// </summary>
     public Version? FirmwareRevision { get; set; }
