@@ -89,15 +89,46 @@ public class DeviceDiscoveryService : IDisposable
             _logger.LogCIP($"Packet hex: {BitConverter.ToString(requestPacket)}");
 
             // Send broadcast (REQ-3.3.1-001)
+            // Try both 255.255.255.255 and subnet-directed broadcast
+            // Some switches block 255.255.255.255 but allow subnet broadcasts
             _socket.SendBroadcast(requestPacket);
             _logger.LogScan($"Sent List Identity broadcast to 255.255.255.255:44818");
+
+            // Also send subnet-directed broadcast if we have subnet mask
+            if (_networkAdapter.SubnetMask != null)
+            {
+                var subnetBroadcast = CalculateSubnetBroadcast(_networkAdapter.IPAddress!, _networkAdapter.SubnetMask);
+                if (subnetBroadcast != null && !subnetBroadcast.Equals(IPAddress.Broadcast))
+                {
+                    _socket.SendUnicast(requestPacket, subnetBroadcast);
+                    _logger.LogScan($"Sent List Identity subnet broadcast to {subnetBroadcast}:44818");
+                }
+            }
+
             _logger.LogScan($"Listening for responses for 3 seconds...");
 
             // Receive all responses within timeout (REQ-3.3.1-003: 3 seconds)
             var responses = await _socket.ReceiveAllResponsesAsync(cancellationToken);
-            _logger.LogScan($"Received {responses.Count} response(s)");
+            _logger.LogScan($"Received {responses.Count} total response(s)");
 
-            if (responses.Count == 0)
+            // Log all response sources for diagnostics
+            foreach (var (data, source) in responses)
+            {
+                _logger.LogInfo($"  Response source: {source.Address}:{source.Port} ({data.Length} bytes)");
+            }
+
+            // Filter out our own broadcast echo (we receive our own packet when bound to 44818)
+            var validResponses = responses.Where(r => !r.Source.Address.Equals(_networkAdapter.IPAddress)).ToList();
+            var selfResponses = responses.Count - validResponses.Count;
+
+            if (selfResponses > 0)
+            {
+                _logger.LogInfo($"Filtered out {selfResponses} response(s) from our own IP ({_networkAdapter.IPAddress})");
+            }
+
+            _logger.LogScan($"Processing {validResponses.Count} valid device response(s)");
+
+            if (validResponses.Count == 0)
             {
                 _logger.LogWarning("No devices responded to List Identity broadcast");
                 _logger.LogInfo("Possible causes:");
@@ -105,10 +136,11 @@ public class DeviceDiscoveryService : IDisposable
                 _logger.LogInfo("  2. Windows Firewall blocking UDP port 44818");
                 _logger.LogInfo("  3. Devices have EtherNet/IP disabled");
                 _logger.LogInfo("  4. Wrong network adapter selected");
+                _logger.LogInfo("  5. Devices on different subnet (broadcast doesn't cross subnets)");
             }
 
-            // Parse each response (REQ-3.3.1-004)
-            foreach (var (data, source) in responses)
+            // Parse each valid response (REQ-3.3.1-004)
+            foreach (var (data, source) in validResponses)
             {
                 _logger.LogCIP($"Response from {source.Address}: {data.Length} bytes");
                 _logger.LogCIP($"Response hex (first 64 bytes): {BitConverter.ToString(data, 0, Math.Min(64, data.Length))}");
@@ -193,6 +225,35 @@ public class DeviceDiscoveryService : IDisposable
             });
 
             _logger.LogDiscovery($"Added new device: {device.MacAddress} at {device.IPAddress}");
+        }
+    }
+
+    /// <summary>
+    /// Calculate subnet-directed broadcast address from IP and subnet mask
+    /// Example: IP=192.168.21.252, Mask=255.255.255.0 -> Broadcast=192.168.21.255
+    /// </summary>
+    private static IPAddress? CalculateSubnetBroadcast(IPAddress ip, IPAddress subnetMask)
+    {
+        try
+        {
+            var ipBytes = ip.GetAddressBytes();
+            var maskBytes = subnetMask.GetAddressBytes();
+
+            if (ipBytes.Length != 4 || maskBytes.Length != 4)
+                return null; // Only IPv4 supported
+
+            var broadcastBytes = new byte[4];
+            for (int i = 0; i < 4; i++)
+            {
+                // Broadcast = IP | ~Mask
+                broadcastBytes[i] = (byte)(ipBytes[i] | ~maskBytes[i]);
+            }
+
+            return new IPAddress(broadcastBytes);
+        }
+        catch
+        {
+            return null;
         }
     }
 
