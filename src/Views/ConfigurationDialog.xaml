@@ -63,9 +63,9 @@
                 <!-- Current IP/Subnet -->
                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Current IP:" Margin="0,2,10,2" FontWeight="Bold"/>
                 <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,2">
-                    <Run Text="{Binding CurrentIPAddress}"/>
+                    <Run Text="{Binding CurrentIPAddress, Mode=OneWay}"/>
                     <Run Text=" / "/>
-                    <Run Text="{Binding CurrentSubnetMask}"/>
+                    <Run Text="{Binding CurrentSubnetMask, Mode=OneWay}"/>
                 </TextBlock>
 
                 <!-- Current Gateway -->
