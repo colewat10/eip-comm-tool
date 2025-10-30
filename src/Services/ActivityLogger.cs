@@ -48,6 +48,11 @@ public class ActivityLogger
     // Constants for log management
     private const int MaxLogEntries = 10000;
 
+    /// <summary>
+    /// Global logger instance for access from static contexts (e.g., message parsers)
+    /// </summary>
+    public static ActivityLogger? GlobalLogger { get; set; }
+
     public ActivityLogger(ILogger logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
