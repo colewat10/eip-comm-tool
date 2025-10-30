@@ -46,9 +46,10 @@ public class DeviceDiscoveryService : IDisposable
     /// <summary>
     /// Perform single device discovery scan (REQ-3.3.3-001, REQ-3.3.3-002)
     /// </summary>
+    /// <param name="autoBrowseMode">If true, increments missed scans instead of clearing list (REQ-3.3.2-004)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Number of devices discovered</returns>
-    public async Task<int> ScanAsync(CancellationToken cancellationToken = default)
+    public async Task<int> ScanAsync(bool autoBrowseMode = false, CancellationToken cancellationToken = default)
     {
         if (IsScanning)
         {
@@ -61,7 +62,22 @@ public class DeviceDiscoveryService : IDisposable
 
         try
         {
+            // REQ-3.3.2-006: In auto-browse mode, increment missed scans for all devices
+            // Devices that respond will have their counter reset to 0
+            if (autoBrowseMode)
+            {
+                IncrementMissedScans();
+            }
+
             _logger.LogScan($"Starting device scan on {_networkAdapter.Name} ({_networkAdapter.IPAddress})");
+            if (autoBrowseMode)
+            {
+                _logger.LogScan("Auto-browse mode: Updating existing devices");
+            }
+            else
+            {
+                _logger.LogScan("Manual scan mode: Will discover new devices");
+            }
 
             // Ensure socket is open
             if (_socket == null)
