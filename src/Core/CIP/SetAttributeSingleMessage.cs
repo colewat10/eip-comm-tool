@@ -36,6 +36,29 @@ public static class SetAttributeSingleMessage
     private const byte TimeoutTicks = 0xF9;           // Approximately 2 seconds
 
     /// <summary>
+    /// Build Set_Attribute_Single request for Configuration Control (Attribute 3)
+    /// REQ-3.6.4-006: Set to static IP mode (0x00000001) to disable DHCP
+    /// Value: 0x00000001 = Static IP, 0x00000000 = DHCP/BootP mode
+    /// </summary>
+    /// <param name="setToStaticIP">True to enable static IP mode (disable DHCP), false for DHCP mode</param>
+    /// <param name="targetDeviceIP">IP address of target device</param>
+    /// <returns>CIP message bytes ready to send</returns>
+    public static byte[] BuildSetConfigurationControlRequest(bool setToStaticIP, IPAddress targetDeviceIP)
+    {
+        // DWORD value: 0x00000001 = Static IP, 0x00000000 = DHCP
+        uint controlValue = setToStaticIP ? 0x00000001u : 0x00000000u;
+
+        // Convert to 4-byte array (little-endian for CIP DWORD)
+        byte[] controlBytes = new byte[4];
+        controlBytes[0] = (byte)(controlValue & 0xFF);
+        controlBytes[1] = (byte)((controlValue >> 8) & 0xFF);
+        controlBytes[2] = (byte)((controlValue >> 16) & 0xFF);
+        controlBytes[3] = (byte)((controlValue >> 24) & 0xFF);
+
+        return BuildSetAttributeRequest(targetDeviceIP, 3, controlBytes);
+    }
+
+    /// <summary>
     /// Build Set_Attribute_Single request for IP Address (Attribute 5)
     /// REQ-3.5.5-002: IP Address (4 bytes, network byte order)
     /// </summary>
