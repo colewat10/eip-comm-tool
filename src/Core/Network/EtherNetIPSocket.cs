@@ -5,7 +5,7 @@ namespace EtherNetIPTool.Core.Network;
 
 /// <summary>
 /// UDP socket wrapper for EtherNet/IP broadcast communication
-/// Implements single-socket architecture with ephemeral port per REQ-4.1.1-001
+/// Implements standard EtherNet/IP discovery using port 2222 source binding per REQ-4.1.1-001
 /// Handles sending List Identity broadcasts and receiving responses
 /// REQ-3.3.1-001, REQ-3.3.1-003, REQ-4.3.3, REQ-4.3.4
 /// </summary>
@@ -16,7 +16,13 @@ public class EtherNetIPSocket : IDisposable
     private bool _disposed;
 
     /// <summary>
-    /// Standard EtherNet/IP port for explicit messaging (UDP/TCP)
+    /// Standard EtherNet/IP source port for List Identity broadcasts (0x08AE)
+    /// Following industrial Ethernet best practices for reliable device discovery
+    /// </summary>
+    public const int EtherNetIPSourcePort = 2222;
+
+    /// <summary>
+    /// Standard EtherNet/IP destination port for explicit messaging (0xAF12)
     /// </summary>
     public const int EtherNetIPPort = 44818;
 
@@ -24,6 +30,11 @@ public class EtherNetIPSocket : IDisposable
     /// Default discovery timeout in milliseconds (REQ-3.3.1-003)
     /// </summary>
     public const int DefaultDiscoveryTimeout = 3000;
+
+    /// <summary>
+    /// Minimum receive buffer size for complete encapsulation packets
+    /// </summary>
+    public const int MinimumReceiveBufferSize = 4096;
 
     /// <summary>
     /// Get the local port the socket is bound to (0 if not open)
@@ -42,9 +53,14 @@ public class EtherNetIPSocket : IDisposable
     /// <summary>
     /// Open UDP socket for broadcast communication
     ///
-    /// Per REQ-4.1.1-001: Uses single socket with OS-assigned ephemeral port.
-    /// This ensures compatibility with RSLinx and other EtherNet/IP tools
-    /// that may already be using port 44818.
+    /// Per REQ-4.1.1-001: Binds to standard EtherNet/IP source port 2222 (0x08AE).
+    /// This follows industrial Ethernet best practices for reliable device discovery,
+    /// matching the proven pycomm3 implementation approach.
+    ///
+    /// Socket options:
+    /// - SO_BROADCAST: Enables broadcast packet transmission
+    /// - SO_REUSEADDR: Allows multiple applications to bind to same port
+    /// - ReceiveBuffer: Minimum 4096 bytes for complete encapsulation packets
     ///
     /// Socket is bound to specific network adapter to ensure broadcasts
     /// go out the correct interface per REQ-4.1.1-002.
@@ -57,52 +73,66 @@ public class EtherNetIPSocket : IDisposable
 
         try
         {
-            // REQ-4.1.1-001: Use ephemeral port (port 0 = OS assigns free port)
-            var ephemeralEndPoint = new IPEndPoint(_localIP, 0);
-            _udpClient = new UdpClient(ephemeralEndPoint)
-            {
-                EnableBroadcast = true,
-                Client =
-                {
-                    ReceiveTimeout = DefaultDiscoveryTimeout,
-                    SendTimeout = 5000
-                }
-            };
+            // REQ-4.1.1-001: Bind to standard EtherNet/IP source port 2222
+            var sourceEndPoint = new IPEndPoint(_localIP, EtherNetIPSourcePort);
+
+            // Create socket with explicit options for industrial Ethernet compatibility
+            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+
+            // Set SO_REUSEADDR to allow multiple applications to use port 2222
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+
+            // Set SO_BROADCAST to enable broadcast packet transmission
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
+
+            // Set receive buffer size to ensure complete encapsulation packets can be received
+            socket.ReceiveBufferSize = Math.Max(socket.ReceiveBufferSize, MinimumReceiveBufferSize);
+
+            // Bind to specific network adapter and port
+            socket.Bind(sourceEndPoint);
+
+            // Set timeouts
+            socket.ReceiveTimeout = DefaultDiscoveryTimeout;
+            socket.SendTimeout = 5000;
+
+            // Wrap in UdpClient for convenience methods
+            _udpClient = new UdpClient();
+            _udpClient.Client = socket;
         }
         catch (SocketException ex)
         {
             throw new SocketException((int)ex.SocketErrorCode,
-                $"Failed to create UDP socket on {_localIP}: {ex.Message}");
+                $"Failed to create UDP socket on {_localIP}:{EtherNetIPSourcePort}: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Send List Identity to subnet broadcast address
-    /// Per REQ-4.1.1-002: Sends ONLY to subnet broadcast, not global broadcast
+    /// Send List Identity broadcast to discover EtherNet/IP devices
+    /// Per REQ-4.1.1-002: Sends to global broadcast (255.255.255.255) by default
+    /// following industrial Ethernet best practices for maximum device compatibility
     /// (REQ-3.3.1-001)
     /// </summary>
     /// <param name="packet">List Identity request packet</param>
-    /// <param name="subnetBroadcast">Calculated subnet broadcast address (e.g., 192.168.21.255)</param>
+    /// <param name="broadcastAddress">Broadcast address (defaults to 255.255.255.255 if null)</param>
     /// <exception cref="InvalidOperationException">If socket not open</exception>
     /// <exception cref="SocketException">If send fails</exception>
-    public void SendSubnetBroadcast(byte[] packet, IPAddress subnetBroadcast)
+    public void SendBroadcast(byte[] packet, IPAddress? broadcastAddress = null)
     {
         if (_udpClient == null)
             throw new InvalidOperationException("Socket not open. Call Open() first.");
 
-        if (subnetBroadcast == null)
-            throw new ArgumentNullException(nameof(subnetBroadcast));
-
         try
         {
-            // REQ-4.1.1-002: Send to subnet broadcast address only
-            var broadcastEndPoint = new IPEndPoint(subnetBroadcast, EtherNetIPPort);
+            // Default to global broadcast (255.255.255.255) for maximum compatibility
+            var targetAddress = broadcastAddress ?? IPAddress.Broadcast;
+            var broadcastEndPoint = new IPEndPoint(targetAddress, EtherNetIPPort);
             _udpClient.Send(packet, packet.Length, broadcastEndPoint);
         }
         catch (SocketException ex)
         {
+            var target = broadcastAddress ?? IPAddress.Broadcast;
             throw new SocketException((int)ex.SocketErrorCode,
-                $"Failed to send subnet broadcast to {subnetBroadcast}: {ex.Message}");
+                $"Failed to send broadcast to {target}: {ex.Message}");
         }
     }
 
