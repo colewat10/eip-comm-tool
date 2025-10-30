@@ -84,7 +84,20 @@ This is a professional industrial automation tool for commissioning EtherNet/IP 
 - Broadcast/unicast reply handling based on BootP FLAGS field
 - Automatic server lifecycle management on mode and adapter changes
 
-**Phase 7-9**: Auto-Browse, Logging/Help System, Testing & Polish
+**Phase 7 - Auto-Browse and Scanning** ✅ Complete
+- Auto-browse checkbox for enable/disable automatic periodic discovery
+- Auto-browse enabled by default on application startup
+- Configurable scan interval (1-60 seconds, default 5 seconds)
+- Background DispatcherTimer for non-blocking periodic scans
+- Real-time device table updates as responses received
+- Device staleness tracking with LastSeen timestamp and MissedScans counter
+- Automatic removal of devices not responding for 3 consecutive scans (15 seconds default)
+- Manual "Scan Now" button clears device list before populating new results
+- Auto-browse integration with operating mode switching (disabled in BootP mode)
+- Auto-browse restart on network adapter selection changes
+- Comprehensive logging for scan operations and stale device removal
+
+**Phase 8-9**: Logging/Help System, Testing & Polish
 
 ## Technology Stack
 
@@ -198,6 +211,7 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for detailed troubleshoot
 - **[Phase 4 Implementation Guide](docs/PHASE4_IMPLEMENTATION.md)**: Configuration Dialog implementation details
 - **[Phase 5 Implementation Guide](docs/PHASE5_IMPLEMENTATION.md)**: CIP Configuration Protocol implementation details
 - **[Phase 6 Implementation Guide](docs/PHASE6_IMPLEMENTATION.md)**: BootP/DHCP Server implementation details
+- **[Phase 7 Implementation Guide](docs/PHASE7_IMPLEMENTATION.md)**: Auto-Browse and Scanning implementation details
 - **[Agent Profiles](agents/)**: AI development agent specifications
 
 ## Development Approach
@@ -222,7 +236,7 @@ All development strictly follows the PRD and agent profiles to ensure profession
 
 ## Roadmap
 
-### Current Status: Phase 6 Complete ✅
+### Current Status: Phase 7 Complete ✅
 
 **Phase 1 - Core Infrastructure:**
 - [x] Project structure and build system
@@ -286,11 +300,29 @@ All development strictly follows the PRD and agent profiles to ensure profession
 - [x] MainWindowViewModel mode switching integration
 - [x] Automatic adapter change handling
 
-### Next: Phase 7 - Auto-Browse
+**Phase 7 - Auto-Browse and Scanning:**
+- [x] AutoBrowseService with background DispatcherTimer
+- [x] IsAutoBrowseEnabled property (default true)
+- [x] ScanIntervalSeconds property (1-60 range, default 5)
+- [x] Device LastSeen timestamp tracking
+- [x] Device MissedScans counter tracking
+- [x] IncrementMissedScans() called before each auto-browse scan
+- [x] ResetMissedScans() called when device responds
+- [x] RemoveStaleDevices() removes devices with 3+ missed scans
+- [x] DeviceDiscoveryService.ScanAsync() autoBrowseMode parameter
+- [x] Manual "Scan Now" clears device list before scan
+- [x] Auto-browse disabled in BootP/DHCP mode
+- [x] Auto-browse re-enabled when switching to EtherNet/IP mode
+- [x] Auto-browse restarts on adapter selection change
+- [x] Comprehensive logging for scan cycles and stale removal
 
-- [ ] Embedded web browser control
-- [ ] HTTP server detection
-- [ ] Device web interface integration
+### Next: Phase 8 - Logging and Help System
+
+- [ ] Activity log viewer window
+- [ ] Log category filtering
+- [ ] Log export to text file
+- [ ] Embedded HTML help viewer
+- [ ] Tooltips and status bar help text
 
 ## License
 
@@ -299,5 +331,5 @@ See [LICENSE](LICENSE) file for details.
 ---
 
 **Version**: 1.0.0-alpha
-**Status**: Phase 6 Complete - BootP/DHCP Server
+**Status**: Phase 7 Complete - Auto-Browse and Scanning
 **Last Updated**: 2025-10-30
