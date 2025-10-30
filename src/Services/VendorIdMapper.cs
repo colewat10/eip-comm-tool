@@ -22,7 +22,7 @@ public static class VendorIdMapper
         // Additional common vendors (from PRD Appendix A)
         { 0x0002, "Omron Corporation" },
         { 0x0010, "Phoenix Contact" },
-        { 0x0025, "Turck" },
+        { 0x0030, "Turck" },
         { 0x01CF, "Schneider Electric" },
         { 0x0208, "Siemens" },
         { 0x028A, "Beckhoff Automation" },
@@ -36,7 +36,6 @@ public static class VendorIdMapper
         { 0x0009, "Schneider Automation" },
         { 0x000B, "Bosch Rexroth" },
         { 0x000C, "Eaton Corporation" },
-        // 0x0010 Phoenix Contact - already defined above at line 24
         { 0x0011, "Wago" },
         { 0x0012, "SMC Corporation" },
         { 0x0013, "Festo" },
@@ -53,7 +52,7 @@ public static class VendorIdMapper
         { 0x0024, "TE Connectivity" },
         { 0x002B, "Hirschmann" },
         { 0x002D, "ifm electronic" },
-        { 0x0030, "Belden" },
+        { 0x00EE, "Belden" },
         { 0x0034, "Balluff" },
         { 0x0036, "Panduit" },
         { 0x003D, "Murrelektronik" },
@@ -88,7 +87,6 @@ public static class VendorIdMapper
         { 0x01B9, "Gefran" },
         { 0x01E0, "Unitronics" },
         { 0x01F4, "Sick Stegmann" },
-        // 0x0208 Siemens - already defined above at line 27
         { 0x0212, "Watlow" },
         { 0x022D, "Opto 22" },
         { 0x0258, "Acromag" },

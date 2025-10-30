@@ -24,7 +24,7 @@
             <!-- Spacing: 10px -->
             <RowDefinition Height="10"/>
             <!-- New Configuration box: 180px -->
-            <RowDefinition Height="180"/>
+            <RowDefinition Height="190"/>
             <!-- Required field note: 15px -->
             <RowDefinition Height="15"/>
             <!-- Spacing: 5px -->
@@ -135,7 +135,7 @@
                 <TextBlock Grid.Row="6" Grid.Column="0" Text="Hostname:" Margin="0,5,10,2" VerticalAlignment="Center"/>
                 <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,5,0,2">
                     <TextBox Text="{Binding NewHostname, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             Width="200"
+                             Width="180"
                              MaxLength="64"/>
                     <TextBlock Text="(optional, max 64 chars)" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#808080" FontStyle="Italic"/>
                 </StackPanel>
