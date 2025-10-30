@@ -2,9 +2,26 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using EtherNetIPTool.Models;
 using EtherNetIPTool.Services;
+using EtherNetIPTool.Core.BootP;
 using Serilog;
 
 namespace EtherNetIPTool.ViewModels;
+
+/// <summary>
+/// Operating modes for the application (REQ-3.2)
+/// </summary>
+public enum OperatingMode
+{
+    /// <summary>
+    /// EtherNet/IP device discovery mode (default)
+    /// </summary>
+    EtherNetIP,
+
+    /// <summary>
+    /// BootP/DHCP server mode for commissioning factory-default devices
+    /// </summary>
+    BootP
+}
 
 /// <summary>
 /// ViewModel for the main application window
@@ -18,12 +35,15 @@ public class MainWindowViewModel : ViewModelBase
     private readonly PrivilegeDetectionService _privilegeService;
 
     private DeviceDiscoveryService? _discoveryService;
+    private BootPServer? _bootpServer;
+    private BootPConfigurationService? _bootpConfigurationService;
     private NetworkAdapterInfo? _selectedAdapter;
     private Device? _selectedDevice;
     private string _statusText = "Ready";
     private string _currentTime = string.Empty;
     private bool _isAdministrator;
     private bool _isScanning;
+    private OperatingMode _operatingMode = OperatingMode.EtherNetIP;
 
     /// <summary>
     /// Constructor for MainWindowViewModel
@@ -151,6 +171,31 @@ public class MainWindowViewModel : ViewModelBase
     /// Can perform scan (not already scanning and adapter selected)
     /// </summary>
     public bool CanScan => !IsScanning && SelectedAdapter != null;
+
+    /// <summary>
+    /// Current operating mode (REQ-3.2-001)
+    /// </summary>
+    public OperatingMode OperatingMode
+    {
+        get => _operatingMode;
+        set
+        {
+            if (SetProperty(ref _operatingMode, value))
+            {
+                OnOperatingModeChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Indicates if currently in EtherNet/IP mode (REQ-3.2-003)
+    /// </summary>
+    public bool IsEtherNetIPMode => OperatingMode == OperatingMode.EtherNetIP;
+
+    /// <summary>
+    /// Indicates if currently in BootP/DHCP mode (REQ-3.2-004)
+    /// </summary>
+    public bool IsBootPMode => OperatingMode == OperatingMode.BootP;
 
     /// <summary>
     /// Currently selected device in the table (REQ-3.4-006)
@@ -341,6 +386,13 @@ public class MainWindowViewModel : ViewModelBase
                 OnPropertyChanged(nameof(DeviceCountText));
             };
 
+            // If in BootP mode, restart server on new adapter
+            if (OperatingMode == OperatingMode.BootP)
+            {
+                StopBootPServer();
+                StartBootPServer();
+            }
+
             // Notify property changes
             OnPropertyChanged(nameof(SelectedAdapter));
             OnPropertyChanged(nameof(Devices));
@@ -351,11 +403,246 @@ public class MainWindowViewModel : ViewModelBase
         {
             _discoveryService?.Dispose();
             _discoveryService = null;
+
+            // Stop BootP server if no adapter selected
+            StopBootPServer();
+
             StatusText = "No adapter selected";
 
             OnPropertyChanged(nameof(Devices));
             OnPropertyChanged(nameof(DeviceCountText));
             OnPropertyChanged(nameof(CanScan));
+        }
+    }
+
+    /// <summary>
+    /// Handle operating mode change (REQ-3.2-001)
+    /// </summary>
+    private void OnOperatingModeChanged()
+    {
+        _activityLogger.LogInfo($"Operating mode changed to: {OperatingMode}");
+
+        if (OperatingMode == OperatingMode.EtherNetIP)
+        {
+            // REQ-3.2-003: EtherNet/IP mode - enable device discovery
+            StopBootPServer();
+            StatusText = "Ready - EtherNet/IP Discovery Mode";
+        }
+        else if (OperatingMode == OperatingMode.BootP)
+        {
+            // REQ-3.2-004: BootP/DHCP mode - start server
+            StartBootPServer();
+        }
+
+        // Notify property changes for mode-dependent UI elements
+        OnPropertyChanged(nameof(IsEtherNetIPMode));
+        OnPropertyChanged(nameof(IsBootPMode));
+        OnPropertyChanged(nameof(CanScan));
+    }
+
+    /// <summary>
+    /// Start BootP server (REQ-3.6.1)
+    /// </summary>
+    private void StartBootPServer()
+    {
+        if (SelectedAdapter == null)
+        {
+            _activityLogger.LogWarning("Cannot start BootP server: No network adapter selected");
+            StatusText = "BootP/DHCP Mode: Please select a network adapter";
+            return;
+        }
+
+        // REQ-3.6.1-002: Check Administrator privileges
+        if (!IsAdministrator)
+        {
+            _activityLogger.LogWarning("Cannot start BootP server: Administrator privileges required");
+            StatusText = "BootP/DHCP Mode: Administrator privileges required";
+
+            System.Windows.MessageBox.Show(
+                "BootP/DHCP server mode requires Administrator privileges.\n\n" +
+                "Port 68 is a privileged port that requires elevated permissions.\n\n" +
+                "Please restart the application as Administrator to use this feature.",
+                "Administrator Privileges Required",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+
+            return;
+        }
+
+        try
+        {
+            // Create BootP server if not already created
+            if (_bootpServer == null)
+            {
+                _bootpServer = new BootPServer(_activityLogger);
+                _bootpConfigurationService = new BootPConfigurationService(_activityLogger, _bootpServer);
+
+                // REQ-3.6.2-003: Wire up RequestReceived event
+                _bootpServer.RequestReceived += OnBootPRequestReceived;
+            }
+
+            // REQ-3.6.1-001: Start UDP server listening on port 68
+            _bootpServer.Start(SelectedAdapter.IPAddress);
+
+            // REQ-3.6.1-003: Update status bar text
+            StatusText = "BootP/DHCP Mode: Listening for factory-default device requests...";
+            _activityLogger.LogInfo($"BootP server started successfully on {SelectedAdapter.IPAddress}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _activityLogger.LogError($"Failed to start BootP server: {ex.Message}");
+            StatusText = "BootP/DHCP Mode: Access denied - Administrator privileges required";
+
+            System.Windows.MessageBox.Show(
+                "Failed to start BootP/DHCP server:\n\n" +
+                "Access denied. Port 68 requires Administrator privileges.\n\n" +
+                "Please restart the application as Administrator.",
+                "BootP Server Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"Failed to start BootP server: {ex.Message}");
+            StatusText = $"BootP/DHCP Mode: Server failed to start - {ex.Message}";
+
+            System.Windows.MessageBox.Show(
+                $"Failed to start BootP/DHCP server:\n\n{ex.Message}",
+                "BootP Server Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Stop BootP server (REQ-3.6.1-004)
+    /// </summary>
+    private void StopBootPServer()
+    {
+        if (_bootpServer == null || !_bootpServer.IsListening)
+            return;
+
+        try
+        {
+            _bootpServer.Stop();
+            _activityLogger.LogInfo("BootP server stopped");
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"Error stopping BootP server: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handle BootP request received event (REQ-3.6.2-003, REQ-3.6.3)
+    /// </summary>
+    private void OnBootPRequestReceived(object? sender, BootPRequestEventArgs e)
+    {
+        // Must be invoked on UI thread
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            try
+            {
+                _activityLogger.LogBootP($"BootP request received - displaying configuration dialog");
+
+                // Create ViewModel with request information
+                var viewModel = new BootPConfigurationViewModel(e.Request, SelectedAdapter!.IPAddress);
+
+                // REQ-3.6.3-001: Display modal configuration dialog
+                var configDialog = new Views.BootPConfigurationDialog(viewModel)
+                {
+                    Owner = System.Windows.Application.Current.MainWindow
+                };
+
+                var dialogResult = configDialog.ShowDialog();
+
+                // REQ-3.6.3-011: User clicked "Ignore Request"
+                if (dialogResult != true || viewModel.Result == null)
+                {
+                    _activityLogger.LogBootP("BootP request ignored by user");
+                    StatusText = "BootP/DHCP Mode: Request ignored - Listening...";
+                    return;
+                }
+
+                // REQ-3.6.3-012: User clicked "Assign & Configure"
+                var result = viewModel.Result;
+                _activityLogger.LogBootP($"User confirmed BootP configuration: IP={result.AssignedIP}, Subnet={result.SubnetMask}");
+
+                // Execute BootP configuration workflow (REQ-3.6.4)
+                ExecuteBootPConfigurationAsync(e.Request, result);
+            }
+            catch (Exception ex)
+            {
+                _activityLogger.LogError($"Error handling BootP request: {ex.Message}");
+                StatusText = $"BootP/DHCP Mode: Error - {ex.Message}";
+            }
+        });
+    }
+
+    /// <summary>
+    /// Execute complete BootP configuration workflow (REQ-3.6.4)
+    /// </summary>
+    private async void ExecuteBootPConfigurationAsync(BootPPacket request, BootPConfigurationResult configResult)
+    {
+        if (_bootpConfigurationService == null)
+        {
+            _activityLogger.LogError("BootP configuration service not initialized");
+            return;
+        }
+
+        try
+        {
+            StatusText = "BootP/DHCP Mode: Sending configuration to device...";
+
+            // REQ-3.6.4: Complete workflow (send reply → wait 2s → disable DHCP if requested)
+            var result = await _bootpConfigurationService.ConfigureDeviceAsync(
+                request,
+                configResult.AssignedIP,
+                configResult.SubnetMask,
+                configResult.Gateway,
+                configResult.DisableDhcp);
+
+            // Display result message
+            var statusMessage = result.GetStatusMessage();
+            StatusText = $"BootP/DHCP Mode: {statusMessage}";
+
+            if (result.Success)
+            {
+                _activityLogger.LogInfo($"BootP configuration completed successfully");
+
+                System.Windows.MessageBox.Show(
+                    statusMessage,
+                    "BootP Configuration Successful",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+            }
+            else
+            {
+                _activityLogger.LogError($"BootP configuration failed: {result.ErrorMessage}");
+
+                System.Windows.MessageBox.Show(
+                    statusMessage,
+                    "BootP Configuration Failed",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
+
+            // Return to listening state
+            StatusText = "BootP/DHCP Mode: Listening for factory-default device requests...";
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"BootP configuration error: {ex.Message}");
+            StatusText = $"BootP/DHCP Mode: Configuration error - {ex.Message}";
+
+            System.Windows.MessageBox.Show(
+                $"BootP configuration failed:\n\n{ex.Message}",
+                "BootP Configuration Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+
+            // Return to listening state
+            StatusText = "BootP/DHCP Mode: Listening for factory-default device requests...";
         }
     }
 
@@ -381,6 +668,12 @@ public class MainWindowViewModel : ViewModelBase
     private void ExitApplication()
     {
         _activityLogger.LogInfo("User requested application exit");
+
+        // Cleanup resources
+        StopBootPServer();
+        _bootpServer?.Dispose();
+        _discoveryService?.Dispose();
+
         System.Windows.Application.Current.Shutdown();
     }
 
