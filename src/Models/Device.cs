@@ -104,9 +104,19 @@ public class Device
     public Version? FirmwareRevision { get; set; }
 
     /// <summary>
-    /// MAC address formatted for display
+    /// MAC address formatted for display with colons (e.g., 00:07:4B:AC:5D:11)
     /// </summary>
-    public string MacAddressString => MacAddress.ToString();
+    public string MacAddressString
+    {
+        get
+        {
+            if (MacAddress == null || MacAddress.Equals(PhysicalAddress.None))
+                return "00:00:00:00:00:00";
+            
+            var bytes = MacAddress.GetAddressBytes();
+            return string.Join(":", bytes.Select(b => b.ToString("X2")));
+        }
+}
 
     /// <summary>
     /// IP address formatted for display
