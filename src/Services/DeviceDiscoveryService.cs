@@ -171,19 +171,21 @@ public class DeviceDiscoveryService : IDisposable
 
     /// <summary>
     /// Add new device or update existing device in collection
-    /// (REQ-3.3.4-003: Duplicate devices based on MAC shall be updated in place)
+    /// (REQ-3.3.4-003: Duplicate devices based on MAC+IP shall be updated in place)
+    /// Updated to support dual-port devices (same MAC, different IPs)
     /// </summary>
     private void AddOrUpdateDevice(Device device)
     {
-        // Find existing device by MAC address (unique identifier)
+        // Find existing device by MAC address + IP address (unique identifier)
+        // Changed from MAC-only to MAC+IP to support dual-port devices
         var existingDevice = Devices.FirstOrDefault(d =>
             d.MacAddress.Equals(device.MacAddress) &&
+            d.IPAddress.Equals(device.IPAddress) &&
             !d.MacAddress.Equals(PhysicalAddress.None));
 
         if (existingDevice != null)
         {
             // Update existing device
-            existingDevice.IPAddress = device.IPAddress;
             existingDevice.SubnetMask = device.SubnetMask;
             existingDevice.Gateway = device.Gateway;
             existingDevice.VendorId = device.VendorId;
@@ -200,6 +202,18 @@ public class DeviceDiscoveryService : IDisposable
         }
         else
         {
+            // Check if this MAC address already exists with a different IP (multi-port device)
+            var sameMAC_DifferentIP = Devices.Where(d =>
+                d.MacAddress.Equals(device.MacAddress) &&
+                !d.MacAddress.Equals(PhysicalAddress.None) &&
+                !d.IPAddress.Equals(device.IPAddress)).ToList();
+
+            if (sameMAC_DifferentIP.Any())
+            {
+                var existingIPs = string.Join(", ", sameMAC_DifferentIP.Select(d => d.IPAddress));
+                _logger.LogDiscovery($"Multi-port device detected: MAC {device.MacAddress} has ports at {existingIPs}, {device.IPAddress}");
+            }
+
             // Add new device to collection (on UI thread)
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {

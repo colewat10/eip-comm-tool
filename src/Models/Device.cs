@@ -154,12 +154,13 @@ public class Device
     }
 
     /// <summary>
-    /// Creates a unique identifier for the device (based on MAC address)
+    /// Creates a unique identifier for the device (based on MAC address + IP address)
     /// Used for duplicate detection (REQ-3.3.4-003)
+    /// Updated to support dual-port devices (same MAC, different IPs)
     /// </summary>
     public string GetUniqueId()
     {
-        return MacAddress.ToString();
+        return $"{MacAddress}@{IPAddress}";
     }
 
     /// <summary>
