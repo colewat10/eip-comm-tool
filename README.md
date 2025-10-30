@@ -70,7 +70,21 @@ This is a professional industrial automation tool for commissioning EtherNet/IP 
 - CIP error code translation to human-readable messages
 - Device removal from list after successful configuration
 
-**Phase 6-9**: BootP/DHCP Server, Auto-Browse, Logging/Help System, Testing & Polish
+**Phase 6 - BootP/DHCP Server** ✅ Complete
+- Operating mode switching (EtherNet/IP Discovery vs. BootP/DHCP Server)
+- BootP packet parser (RFC 951 format with DHCP options RFC 2132)
+- BootP reply builder with magic cookie and DHCP option 53 (DHCPOFFER)
+- UDP server listening on port 68 (requires Administrator privileges)
+- Privilege detection with graceful degradation and user notification
+- BootP configuration dialog (450x350px) with request information display
+- IP/Subnet/Gateway configuration with IpOctetInput controls
+- "Disable DHCP after assignment" option (default enabled)
+- Complete configuration workflow (send reply → wait 2s → disable DHCP)
+- CIP Set_Attribute_Single for Configuration Control (Attribute 3)
+- Broadcast/unicast reply handling based on BootP FLAGS field
+- Automatic server lifecycle management on mode and adapter changes
+
+**Phase 7-9**: Auto-Browse, Logging/Help System, Testing & Polish
 
 ## Technology Stack
 
@@ -87,6 +101,7 @@ This is a professional industrial automation tool for commissioning EtherNet/IP 
 eip-comm-tool/
 ├── src/                           # Main application source
 │   ├── Core/                      # Protocol implementations
+│   │   ├── BootP/                 # BootP/DHCP protocol (RFC 951/2132)
 │   │   ├── CIP/                   # CIP protocol (encapsulation, messages)
 │   │   └── Network/               # Network layer (sockets)
 │   ├── Models/                    # Data models (Device, etc.)
@@ -182,6 +197,7 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for detailed troubleshoot
 - **[Phase 3 Implementation Guide](docs/PHASE3_IMPLEMENTATION.md)**: Device Table UI implementation details
 - **[Phase 4 Implementation Guide](docs/PHASE4_IMPLEMENTATION.md)**: Configuration Dialog implementation details
 - **[Phase 5 Implementation Guide](docs/PHASE5_IMPLEMENTATION.md)**: CIP Configuration Protocol implementation details
+- **[Phase 6 Implementation Guide](docs/PHASE6_IMPLEMENTATION.md)**: BootP/DHCP Server implementation details
 - **[Agent Profiles](agents/)**: AI development agent specifications
 
 ## Development Approach
@@ -206,7 +222,7 @@ All development strictly follows the PRD and agent profiles to ensure profession
 
 ## Roadmap
 
-### Current Status: Phase 5 Complete ✅
+### Current Status: Phase 6 Complete ✅
 
 **Phase 1 - Core Infrastructure:**
 - [x] Project structure and build system
@@ -255,11 +271,26 @@ All development strictly follows the PRD and agent profiles to ensure profession
 - [x] CIP error code translation
 - [x] Device removal on successful configuration
 
-### Next: Phase 6 - BootP/DHCP Server
+**Phase 6 - BootP/DHCP Server:**
+- [x] Operating mode enumeration (EtherNet/IP vs. BootP/DHCP)
+- [x] BootP packet structure (RFC 951 format)
+- [x] BootP packet parser with DHCP options (RFC 2132)
+- [x] BootP reply builder with magic cookie and option 53
+- [x] UDP server on port 68 with broadcast/unicast support
+- [x] Administrator privilege detection and validation
+- [x] BootP server lifecycle management (start/stop)
+- [x] BootP configuration dialog with request information
+- [x] BootP configuration ViewModel with IP validation
+- [x] Configuration workflow service (reply → wait → disable DHCP)
+- [x] CIP Configuration Control attribute (Attribute 3)
+- [x] MainWindowViewModel mode switching integration
+- [x] Automatic adapter change handling
 
-- [ ] BootP/DHCP server implementation
-- [ ] DHCP mode discovery and configuration
-- [ ] Automatic mode detection and switching
+### Next: Phase 7 - Auto-Browse
+
+- [ ] Embedded web browser control
+- [ ] HTTP server detection
+- [ ] Device web interface integration
 
 ## License
 
@@ -268,5 +299,5 @@ See [LICENSE](LICENSE) file for details.
 ---
 
 **Version**: 1.0.0-alpha
-**Status**: Phase 5 Complete - CIP Configuration Protocol
-**Last Updated**: 2025-10-29
+**Status**: Phase 6 Complete - BootP/DHCP Server
+**Last Updated**: 2025-10-30
