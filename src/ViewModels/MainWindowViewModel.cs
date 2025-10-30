@@ -35,6 +35,7 @@ public class MainWindowViewModel : ViewModelBase
     private readonly PrivilegeDetectionService _privilegeService;
 
     private DeviceDiscoveryService? _discoveryService;
+    private AutoBrowseService? _autoBrowseService;
     private BootPServer? _bootpServer;
     private BootPConfigurationService? _bootpConfigurationService;
     private NetworkAdapterInfo? _selectedAdapter;
@@ -44,6 +45,8 @@ public class MainWindowViewModel : ViewModelBase
     private bool _isAdministrator;
     private bool _isScanning;
     private OperatingMode _operatingMode = OperatingMode.EtherNetIP;
+    private bool _isAutoBrowseEnabled = true; // REQ-3.3.2-002: Enabled by default
+    private int _scanIntervalSeconds = 5; // REQ-3.3.2-003: Default 5 seconds
 
     /// <summary>
     /// Constructor for MainWindowViewModel
@@ -196,6 +199,50 @@ public class MainWindowViewModel : ViewModelBase
     /// Indicates if currently in BootP/DHCP mode (REQ-3.2-004)
     /// </summary>
     public bool IsBootPMode => OperatingMode == OperatingMode.BootP;
+
+    /// <summary>
+    /// Auto-browse enabled state (REQ-3.3.2-001, REQ-3.3.2-002)
+    /// Default: true (enabled by default on startup)
+    /// </summary>
+    public bool IsAutoBrowseEnabled
+    {
+        get => _isAutoBrowseEnabled;
+        set
+        {
+            if (SetProperty(ref _isAutoBrowseEnabled, value))
+            {
+                if (_autoBrowseService != null)
+                {
+                    _autoBrowseService.IsEnabled = value;
+                    _activityLogger.LogInfo($"Auto-browse {(value ? "enabled" : "disabled")}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Scan interval in seconds (REQ-3.3.2-003)
+    /// Range: 1-60 seconds, Default: 5 seconds
+    /// </summary>
+    public int ScanIntervalSeconds
+    {
+        get => _scanIntervalSeconds;
+        set
+        {
+            // Validate range 1-60
+            if (value < 1) value = 1;
+            if (value > 60) value = 60;
+
+            if (SetProperty(ref _scanIntervalSeconds, value))
+            {
+                if (_autoBrowseService != null)
+                {
+                    _autoBrowseService.ScanIntervalSeconds = value;
+                    _activityLogger.LogInfo($"Auto-browse interval changed to {value} seconds");
+                }
+            }
+        }
+    }
 
     /// <summary>
     /// Currently selected device in the table (REQ-3.4-006)
@@ -376,8 +423,11 @@ public class MainWindowViewModel : ViewModelBase
 
             StatusText = $"Selected: {SelectedAdapter.DisplayName}";
 
-            // Create new discovery service for selected adapter
+            // Dispose existing services
+            _autoBrowseService?.Dispose();
             _discoveryService?.Dispose();
+
+            // Create new discovery service for selected adapter
             _discoveryService = new DeviceDiscoveryService(_activityLogger, SelectedAdapter);
 
             // Subscribe to collection changes to update device count
@@ -385,6 +435,18 @@ public class MainWindowViewModel : ViewModelBase
             {
                 OnPropertyChanged(nameof(DeviceCountText));
             };
+
+            // REQ-3.3.2: Create and configure auto-browse service
+            _autoBrowseService = new AutoBrowseService(_activityLogger, _discoveryService);
+            _autoBrowseService.ScanIntervalSeconds = _scanIntervalSeconds;
+
+            // REQ-3.1-005: Restart discovery if auto-browse is enabled
+            // Only enable in EtherNet/IP mode
+            if (OperatingMode == OperatingMode.EtherNetIP && _isAutoBrowseEnabled)
+            {
+                _autoBrowseService.IsEnabled = true;
+                _activityLogger.LogInfo("Auto-browse started on adapter change");
+            }
 
             // If in BootP mode, restart server on new adapter
             if (OperatingMode == OperatingMode.BootP)
@@ -401,6 +463,10 @@ public class MainWindowViewModel : ViewModelBase
         }
         else
         {
+            // Stop auto-browse service
+            _autoBrowseService?.Dispose();
+            _autoBrowseService = null;
+
             _discoveryService?.Dispose();
             _discoveryService = null;
 
@@ -426,10 +492,28 @@ public class MainWindowViewModel : ViewModelBase
         {
             // REQ-3.2-003: EtherNet/IP mode - enable device discovery
             StopBootPServer();
+
+            // REQ-3.2-004: Re-enable auto-browse and trigger immediate scan if enabled
+            if (_autoBrowseService != null && _isAutoBrowseEnabled)
+            {
+                _autoBrowseService.IsEnabled = true;
+                _activityLogger.LogInfo("Auto-browse re-enabled (switched to EtherNet/IP mode)");
+            }
+
             StatusText = "Ready - EtherNet/IP Discovery Mode";
         }
         else if (OperatingMode == OperatingMode.BootP)
         {
+            // REQ-3.2-003: Disable auto-browse controls and clear device table
+            if (_autoBrowseService != null)
+            {
+                _autoBrowseService.IsEnabled = false;
+                _activityLogger.LogInfo("Auto-browse disabled (switched to BootP mode)");
+            }
+
+            // Clear device list when switching to BootP mode
+            _discoveryService?.ClearDevices();
+
             // REQ-3.2-004: BootP/DHCP mode - start server
             StartBootPServer();
         }
@@ -670,6 +754,7 @@ public class MainWindowViewModel : ViewModelBase
         _activityLogger.LogInfo("User requested application exit");
 
         // Cleanup resources
+        _autoBrowseService?.Dispose();
         StopBootPServer();
         _bootpServer?.Dispose();
         _discoveryService?.Dispose();
@@ -720,9 +805,15 @@ public class MainWindowViewModel : ViewModelBase
         try
         {
             IsScanning = true;
-            StatusText = "Scanning for devices...";
+            StatusText = "Scanning for devices..."; // REQ-3.3.3-003
 
-            var devicesFound = await _discoveryService.ScanAsync();
+            // REQ-3.3.3-002: Manual scan shall clear existing device list before populating new results
+            _discoveryService.ClearDevices();
+            _activityLogger.LogInfo("Manual scan: Cleared existing device list");
+
+            // REQ-3.3.3-001: Trigger immediate discovery broadcast regardless of auto-browse state
+            // Use autoBrowseMode=false to indicate manual scan (doesn't increment missed scans)
+            var devicesFound = await _discoveryService.ScanAsync(autoBrowseMode: false);
 
             StatusText = devicesFound > 0
                 ? $"Scan complete. Found {devicesFound} device(s)"
