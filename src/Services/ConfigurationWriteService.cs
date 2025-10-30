@@ -75,9 +75,25 @@ public class ConfigurationWriteService
             using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             connectCts.CancelAfter(MessageTimeout);
 
-            _logger.LogCIP($"Connecting to {device.IPAddress}:{EtherNetIPPort}");
-            await tcpClient.ConnectAsync(device.IPAddress, EtherNetIPPort, connectCts.Token);
-            _logger.LogCIP("TCP connection established");
+            _logger.LogCIP($"Connecting to {device.IPAddress}:{EtherNetIPPort} (timeout: {MessageTimeout}ms)");
+
+            try
+            {
+                await tcpClient.ConnectAsync(device.IPAddress, EtherNetIPPort, connectCts.Token);
+                _logger.LogCIP("TCP connection established successfully");
+            }
+            catch (OperationCanceledException) when (connectCts.IsCancellationRequested)
+            {
+                _logger.LogError($"TCP connection timeout after {MessageTimeout}ms");
+                result.SetError($"Connection timeout: Device not responding after {MessageTimeout / 1000} seconds");
+                return result;
+            }
+            catch (SocketException ex)
+            {
+                _logger.LogError($"TCP connection failed: {ex.Message} (SocketErrorCode: {ex.SocketErrorCode})");
+                result.SetError($"Connection failed: {ex.Message}");
+                return result;
+            }
 
             stream = tcpClient.GetStream();
             stream.ReadTimeout = MessageTimeout;
@@ -85,8 +101,30 @@ public class ConfigurationWriteService
 
             // ODVA REQUIREMENT 2: RegisterSession (MANDATORY before any CIP messages)
             _logger.LogCIP("Sending RegisterSession (Command 0x0065)");
-            sessionHandle = await RegisterSessionAsync(stream, cancellationToken);
-            _logger.LogConfig($"Session registered successfully. Session Handle: 0x{sessionHandle:X8}");
+
+            try
+            {
+                sessionHandle = await RegisterSessionAsync(stream, cancellationToken);
+                _logger.LogConfig($"Session registered successfully. Session Handle: 0x{sessionHandle:X8}");
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError($"RegisterSession failed: {ex.Message}");
+                result.SetError($"Session registration failed: {ex.Message}");
+                return result;
+            }
+            catch (IOException ex)
+            {
+                _logger.LogError($"RegisterSession I/O error: {ex.Message}");
+                result.SetError($"Communication error during session registration: {ex.Message}");
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogError("RegisterSession cancelled");
+                result.SetError("Session registration cancelled");
+                return result;
+            }
 
             // REQ-3.5.5-002: Write IP Address (Attribute 5) - REQUIRED
             if (config.IPAddress != null)
@@ -302,11 +340,14 @@ public class ConfigurationWriteService
         _logger.LogCIP($"RegisterSession request: {BitConverter.ToString(request)}");
 
         // Send request
+        _logger.LogCIP("Sending RegisterSession request to device...");
         await stream.WriteAsync(request, cancellationToken);
         await stream.FlushAsync(cancellationToken);
+        _logger.LogCIP("RegisterSession request sent, waiting for response...");
 
         // Read response (minimum 28 bytes)
         var response = await ReadCompleteResponseAsync(stream, cancellationToken);
+        _logger.LogCIP($"Received RegisterSession response ({response.Length} bytes)");
 
         if (response.Length < 28)
         {
@@ -720,20 +761,27 @@ public class ConfigurationWriteService
     /// </summary>
     private async Task<byte[]> ReadCompleteResponseAsync(NetworkStream stream, CancellationToken cancellationToken)
     {
+        _logger.LogCIP("Reading 24-byte encapsulation header...");
+
         // Read 24-byte encapsulation header first
         var header = await ReadExactAsync(stream, 24, cancellationToken);
+        _logger.LogCIP("Encapsulation header received");
 
         // Parse length field (bytes 2-3)
         ushort payloadLength = BitConverter.ToUInt16(header, 2);
+        _logger.LogCIP($"Payload length from header: {payloadLength} bytes");
 
         if (payloadLength == 0)
         {
             // No payload, return just header
+            _logger.LogCIP("No payload data, returning header only");
             return header;
         }
 
         // Read exact payload length
+        _logger.LogCIP($"Reading {payloadLength} bytes of payload data...");
         var payload = await ReadExactAsync(stream, payloadLength, cancellationToken);
+        _logger.LogCIP("Payload data received");
 
         // Combine header + payload
         var fullResponse = new byte[24 + payloadLength];
@@ -751,19 +799,28 @@ public class ConfigurationWriteService
     {
         byte[] buffer = new byte[count];
         int offset = 0;
+        int readAttempts = 0;
+
+        _logger.LogCIP($"ReadExactAsync: Need to read {count} bytes");
 
         while (offset < count)
         {
+            readAttempts++;
+            _logger.LogCIP($"ReadExactAsync: Attempt {readAttempts}, reading {count - offset} bytes (total: {offset}/{count})");
+
             int bytesRead = await stream.ReadAsync(buffer.AsMemory(offset, count - offset), cancellationToken);
 
             if (bytesRead == 0)
             {
+                _logger.LogError($"Connection closed by device. Read {offset}/{count} bytes after {readAttempts} attempts.");
                 throw new IOException($"Connection closed by device. Read {offset}/{count} bytes.");
             }
 
             offset += bytesRead;
+            _logger.LogCIP($"ReadExactAsync: Read {bytesRead} bytes, total: {offset}/{count}");
         }
 
+        _logger.LogCIP($"ReadExactAsync: Successfully read all {count} bytes in {readAttempts} attempts");
         return buffer;
     }
 
