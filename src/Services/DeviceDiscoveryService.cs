@@ -81,33 +81,11 @@ public class DeviceDiscoveryService : IDisposable
             _logger.LogCIP($"Built List Identity request packet ({requestPacket.Length} bytes)");
             _logger.LogCIP($"Packet hex: {BitConverter.ToString(requestPacket)}");
 
-            // Determine broadcast address
-            // Try subnet broadcast first (better for networks that block global broadcast)
-            IPAddress broadcastAddress;
-            if (_networkAdapter.SubnetMask != null)
-            {
-                var subnetBroadcast = CalculateSubnetBroadcast(_networkAdapter.IPAddress!, _networkAdapter.SubnetMask);
-                if (subnetBroadcast != null)
-                {
-                    broadcastAddress = subnetBroadcast;
-                    _logger.LogScan($"Using subnet-directed broadcast: {broadcastAddress}");
-                }
-                else
-                {
-                    broadcastAddress = IPAddress.Broadcast;
-                    _logger.LogScan($"Failed to calculate subnet broadcast, using global broadcast: {broadcastAddress}");
-                }
-            }
-            else
-            {
-                broadcastAddress = IPAddress.Broadcast;
-                _logger.LogScan($"No subnet mask configured, using global broadcast: {broadcastAddress}");
-            }
-
-            // REQ-4.1.1-002: Send broadcast with standard port 2222 binding
-            _socket.SendBroadcast(requestPacket, broadcastAddress);
-            _logger.LogScan($"Sent List Identity broadcast to {broadcastAddress}:44818");
-            _logger.LogInfo($"Broadcast scope: {(broadcastAddress.Equals(IPAddress.Broadcast) ? "Global" : "Subnet-directed")} broadcast with source port 2222");
+            // REQ-4.1.1-002: Use global broadcast by default (pycomm3 approach)
+            // SendBroadcast will default to 255.255.255.255 if no address specified
+            _socket.SendBroadcast(requestPacket);
+            _logger.LogScan($"Sent List Identity broadcast to 255.255.255.255:44818");
+            _logger.LogInfo($"Broadcast scope: Global broadcast with source port 2222");
 
             _logger.LogScan($"Listening for responses for 3 seconds...");
 
@@ -134,16 +112,13 @@ public class DeviceDiscoveryService : IDisposable
 
             if (validResponses.Count == 0)
             {
-                var broadcastType = broadcastAddress.Equals(IPAddress.Broadcast) ? "global" : "subnet";
-                _logger.LogWarning($"No devices responded to {broadcastType} broadcast");
+                _logger.LogWarning($"No devices responded to global broadcast");
                 _logger.LogInfo("Possible causes:");
                 _logger.LogInfo("  1. No EtherNet/IP devices on this network");
-                _logger.LogInfo($"  2. Windows Firewall blocking UDP port 2222 (inbound) - CHECK THIS FIRST");
-                _logger.LogInfo($"     - Run: netsh advfirewall firewall add rule name=\"EIP Discovery\" dir=in action=allow protocol=UDP localport=2222");
+                _logger.LogInfo("  2. Windows Firewall blocking application (add firewall exception for this .exe if needed)");
                 _logger.LogInfo("  3. Devices have EtherNet/IP disabled or not responding to broadcasts");
                 _logger.LogInfo("  4. Wrong network adapter selected");
-                _logger.LogInfo($"  5. Network router/switch blocking {broadcastType} broadcast traffic");
-                _logger.LogInfo("  6. Port 2222 already in use by another application (check SO_REUSEADDR)");
+                _logger.LogInfo("  5. Network router/switch blocking global broadcast traffic");
             }
 
             // Parse each valid response (REQ-3.3.1-004)

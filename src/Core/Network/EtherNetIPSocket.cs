@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Sockets;
-using EtherNetIPTool.Services;
 
 namespace EtherNetIPTool.Core.Network;
 
@@ -102,22 +101,11 @@ public class EtherNetIPSocket : IDisposable
 
             // Verify socket was bound successfully
             var boundEndPoint = socket.LocalEndPoint as IPEndPoint;
-            if (boundEndPoint == null)
+            if (boundEndPoint == null || boundEndPoint.Port != EtherNetIPSourcePort)
             {
                 throw new SocketException((int)SocketError.AddressNotAvailable,
-                    $"Failed to bind socket - LocalEndPoint is null");
+                    $"Failed to bind socket to port {EtherNetIPSourcePort}");
             }
-
-            if (boundEndPoint.Port != EtherNetIPSourcePort)
-            {
-                throw new SocketException((int)SocketError.AddressNotAvailable,
-                    $"Socket bound to wrong port: expected {EtherNetIPSourcePort}, got {boundEndPoint.Port}");
-            }
-
-            // Log successful binding details for diagnostics
-            ActivityLogger.GlobalLogger?.LogInfo($"Socket bound successfully: {boundEndPoint.Address}:{boundEndPoint.Port}");
-            ActivityLogger.GlobalLogger?.LogInfo($"Socket flags: Blocking={socket.Blocking}, Broadcast={socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast)}, ReuseAddr={socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress)}");
-            ActivityLogger.GlobalLogger?.LogInfo($"Socket buffers: Send={socket.SendBufferSize}, Receive={socket.ReceiveBufferSize}");
         }
         catch (SocketException ex)
         {
@@ -146,10 +134,7 @@ public class EtherNetIPSocket : IDisposable
             // Default to global broadcast (255.255.255.255) for maximum compatibility
             var targetAddress = broadcastAddress ?? IPAddress.Broadcast;
             var broadcastEndPoint = new IPEndPoint(targetAddress, EtherNetIPPort);
-
-            int bytesSent = _udpClient.Send(packet, packet.Length, broadcastEndPoint);
-
-            ActivityLogger.GlobalLogger?.LogInfo($"Broadcast sent: {bytesSent} bytes to {targetAddress}:{EtherNetIPPort} from port {(_udpClient.Client.LocalEndPoint as IPEndPoint)?.Port}");
+            _udpClient.Send(packet, packet.Length, broadcastEndPoint);
         }
         catch (SocketException ex)
         {
