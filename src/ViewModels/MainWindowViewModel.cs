@@ -33,6 +33,7 @@ public class MainWindowViewModel : ViewModelBase
         // Initialize services
         var logger = Log.Logger;
         _activityLogger = new ActivityLogger(logger);
+        ActivityLogger.GlobalLogger = _activityLogger; // Set global logger for static contexts
         _networkService = new NetworkInterfaceService(_activityLogger);
         _settingsService = new ApplicationSettingsService(_activityLogger);
         _privilegeService = new PrivilegeDetectionService();
