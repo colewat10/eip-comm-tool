@@ -1063,6 +1063,8 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
+            _activityLogger.LogInfo($"Starting configuration write process for device: {device.MacAddressString} ({device.IPAddressString})");
+
             // Create configuration write service
             var writeService = new ConfigurationWriteService(_activityLogger);
 
@@ -1075,18 +1077,22 @@ public class MainWindowViewModel : ViewModelBase
             // Subscribe to progress updates
             writeService.ProgressUpdated += (current, total, operationName) =>
             {
+                _activityLogger.LogInfo($"Progress: Writing {operationName} ({current}/{total})");
                 progressDialog.UpdateProgress(current, total, operationName);
             };
 
             // Show progress dialog (non-blocking)
             progressDialog.Show();
+            _activityLogger.LogInfo("Progress dialog shown");
 
             // REQ-3.5.5-002: Sequential writes (IP → Subnet → Gateway → Hostname → DNS)
             // REQ-3.5.5-003: Use Unconnected Send via UCMM
             // REQ-3.5.5-004: 3-second timeout per write
             // REQ-3.5.5-005: 100ms delay between writes
             // REQ-3.5.5-007: Stop on first failure
+            _activityLogger.LogInfo("Calling WriteConfigurationAsync...");
             writeResult = await writeService.WriteConfigurationAsync(device, config);
+            _activityLogger.LogInfo($"WriteConfigurationAsync completed. Success: {writeResult.Success}, TotalWrites: {writeResult.TotalWrites}");
 
             // Close progress dialog
             progressDialog.Complete();
@@ -1117,13 +1123,23 @@ public class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             _activityLogger.LogError($"Configuration write error: {ex.Message}", ex);
+            _activityLogger.LogError($"Exception type: {ex.GetType().FullName}");
+            _activityLogger.LogError($"Stack trace: {ex.StackTrace}");
+
             StatusText = $"Configuration write error: {ex.Message}";
 
             // Close progress dialog if still open
-            progressDialog?.Complete();
+            try
+            {
+                progressDialog?.Complete();
+            }
+            catch
+            {
+                // Ignore errors closing progress dialog
+            }
 
             System.Windows.MessageBox.Show(
-                $"Failed to write configuration:\n\n{ex.Message}",
+                $"Failed to write configuration:\n\n{ex.Message}\n\nSee activity log for details.",
                 "Configuration Write Error",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Error);
