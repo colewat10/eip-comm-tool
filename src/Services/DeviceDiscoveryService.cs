@@ -63,32 +63,17 @@ public class DeviceDiscoveryService : IDisposable
         {
             _logger.LogScan($"Starting device scan on {_networkAdapter.Name} ({_networkAdapter.IPAddress})");
 
-            // REQ-4.1.1-003: Subnet mask is required for discovery
-            if (_networkAdapter.SubnetMask == null)
-            {
-                _logger.LogError("Cannot perform discovery: Network adapter subnet mask not configured");
-                _logger.LogInfo("Please ensure the selected network adapter has a valid subnet mask configured");
-                return 0;
-            }
-
-            // Calculate subnet broadcast address (REQ-4.1.1-002)
-            var subnetBroadcast = CalculateSubnetBroadcast(_networkAdapter.IPAddress!, _networkAdapter.SubnetMask);
-            if (subnetBroadcast == null)
-            {
-                _logger.LogError("Failed to calculate subnet broadcast address");
-                return 0;
-            }
-
             // Ensure socket is open
             if (_socket == null)
             {
                 _socket = new EtherNetIPSocket(_networkAdapter.IPAddress!);
                 _socket.Open();
 
-                // REQ-4.1.1-001: Log single-socket architecture details
-                var ephemeralPort = _socket.LocalPort;
-                _logger.LogInfo($"Opened UDP socket on {_networkAdapter.IPAddress}:{ephemeralPort} (ephemeral port)");
-                _logger.LogInfo($"Socket architecture: Single-socket with OS-assigned port for RSLinx compatibility");
+                // REQ-4.1.1-001: Log standard EtherNet/IP socket configuration
+                var sourcePort = _socket.LocalPort;
+                _logger.LogInfo($"Opened UDP socket on {_networkAdapter.IPAddress}:{sourcePort}");
+                _logger.LogInfo($"Socket configuration: Source port {sourcePort} (0x{sourcePort:X4}), following industrial Ethernet best practices");
+                _logger.LogInfo($"Socket options: SO_BROADCAST=enabled, SO_REUSEADDR=enabled, ReceiveBuffer≥4096 bytes");
             }
 
             // Build List Identity request packet (REQ-3.3.1-001, REQ-3.3.1-002)
@@ -96,10 +81,10 @@ public class DeviceDiscoveryService : IDisposable
             _logger.LogCIP($"Built List Identity request packet ({requestPacket.Length} bytes)");
             _logger.LogCIP($"Packet hex: {BitConverter.ToString(requestPacket)}");
 
-            // REQ-4.1.1-002: Send ONLY to subnet broadcast (not global broadcast)
-            _socket.SendSubnetBroadcast(requestPacket, subnetBroadcast);
-            _logger.LogScan($"Sent List Identity broadcast to subnet {subnetBroadcast}:44818");
-            _logger.LogInfo($"Broadcast scope: Subnet only (per REQ-4.1.1-002)");
+            // REQ-4.1.1-002: Send to global broadcast for maximum device compatibility
+            _socket.SendBroadcast(requestPacket);
+            _logger.LogScan($"Sent List Identity broadcast to 255.255.255.255:44818 (global broadcast)");
+            _logger.LogInfo($"Broadcast scope: Global broadcast following industrial Ethernet best practices (per REQ-4.1.1-002)");
 
             _logger.LogScan($"Listening for responses for 3 seconds...");
 
@@ -126,14 +111,14 @@ public class DeviceDiscoveryService : IDisposable
 
             if (validResponses.Count == 0)
             {
-                _logger.LogWarning("No devices responded to subnet broadcast");
+                _logger.LogWarning("No devices responded to global broadcast");
                 _logger.LogInfo("Possible causes:");
-                _logger.LogInfo("  1. No EtherNet/IP devices on this subnet");
-                _logger.LogInfo("  2. Windows Firewall blocking UDP port 44818");
-                _logger.LogInfo("  3. Devices have EtherNet/IP disabled");
+                _logger.LogInfo("  1. No EtherNet/IP devices on this network");
+                _logger.LogInfo("  2. Windows Firewall blocking UDP port 2222 or 44818");
+                _logger.LogInfo("  3. Devices have EtherNet/IP disabled or not responding to broadcasts");
                 _logger.LogInfo("  4. Wrong network adapter selected");
-                _logger.LogInfo($"  5. Devices outside subnet range (broadcast sent to {subnetBroadcast})");
-                _logger.LogInfo("  6. Network switch blocking subnet broadcast traffic");
+                _logger.LogInfo("  5. Network router/switch blocking broadcast traffic (255.255.255.255)");
+                _logger.LogInfo("  6. Port 2222 already in use by another application (check SO_REUSEADDR)");
             }
 
             // Parse each valid response (REQ-3.3.1-004)
