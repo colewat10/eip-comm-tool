@@ -6,8 +6,8 @@ using EtherNetIPTool.Models;
 namespace EtherNetIPTool.Services;
 
 /// <summary>
-/// Service for writing device configuration via CIP Set_Attribute_Single (REQ-3.5.5)
-/// Handles sequential attribute writes with progress tracking
+/// ODVA-compliant service for writing device configuration via CIP Set_Attribute_Single (REQ-3.5.5)
+/// Implements proper EtherNet/IP session management per ODVA Volume 2 specification
 /// </summary>
 public class ConfigurationWriteService
 {
@@ -15,6 +15,18 @@ public class ConfigurationWriteService
     private const int EtherNetIPPort = 44818;
     private const int MessageTimeout = 3000;  // REQ-3.5.5-004: 3-second timeout
     private const int InterMessageDelay = 100; // REQ-3.5.5-005: 100ms between writes
+
+    // ODVA EtherNet/IP Command Codes
+    private const ushort CMD_RegisterSession = 0x0065;
+    private const ushort CMD_UnregisterSession = 0x0066;
+    private const ushort CMD_SendRRData = 0x006F;
+
+    // CPF Item Type Codes
+    private const ushort CPF_NullAddressItem = 0x0000;
+    private const ushort CPF_UnconnectedDataItem = 0x00B2;
+
+    // Static counter for Sender Context uniqueness
+    private static long _contextCounter = 0;
 
     /// <summary>
     /// Progress callback for updating UI (REQ-3.5.5-006)
@@ -31,6 +43,8 @@ public class ConfigurationWriteService
     /// Write complete device configuration (REQ-3.5.5-002)
     /// Attributes written in sequence: IP → Subnet → Gateway → Hostname → DNS
     /// REQ-3.5.5-007: If any write fails, remaining writes are skipped
+    ///
+    /// ODVA Compliance: Uses single TCP connection with proper session management
     /// </summary>
     public async Task<ConfigurationWriteResult> WriteConfigurationAsync(
         Device device,
@@ -42,14 +56,37 @@ public class ConfigurationWriteService
         if (config == null)
             throw new ArgumentNullException(nameof(config));
 
-        _logger.LogConfig($"Starting configuration write to device: {device.MacAddressString} ({device.IPAddressString})");
+        _logger.LogConfig($"Starting ODVA-compliant configuration write to device: {device.MacAddressString} ({device.IPAddressString})");
 
         var result = new ConfigurationWriteResult();
         int currentStep = 0;
         int totalSteps = CountRequiredWrites(config);
 
+        TcpClient? tcpClient = null;
+        NetworkStream? stream = null;
+        uint sessionHandle = 0;
+
         try
         {
+            // ODVA REQUIREMENT 1: Establish TCP connection
+            tcpClient = new TcpClient();
+
+            using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            connectCts.CancelAfter(MessageTimeout);
+
+            _logger.LogCIP($"Connecting to {device.IPAddress}:{EtherNetIPPort}");
+            await tcpClient.ConnectAsync(device.IPAddress, EtherNetIPPort, connectCts.Token);
+            _logger.LogCIP("TCP connection established");
+
+            stream = tcpClient.GetStream();
+            stream.ReadTimeout = MessageTimeout;
+            stream.WriteTimeout = MessageTimeout;
+
+            // ODVA REQUIREMENT 2: RegisterSession (MANDATORY before any CIP messages)
+            _logger.LogCIP("Sending RegisterSession (Command 0x0065)");
+            sessionHandle = await RegisterSessionAsync(stream, cancellationToken);
+            _logger.LogConfig($"Session registered successfully. Session Handle: 0x{sessionHandle:X8}");
+
             // REQ-3.5.5-002: Write IP Address (Attribute 5) - REQUIRED
             if (config.IPAddress != null)
             {
@@ -57,9 +94,11 @@ public class ConfigurationWriteService
                 ProgressUpdated?.Invoke(currentStep, totalSteps, "IP Address");
                 _logger.LogConfig($"[{currentStep}/{totalSteps}] Writing IP Address: {config.IPAddress}");
 
+                var cipMessage = SetAttributeSingleMessage.BuildSetIPAddressRequest(config.IPAddress, device.IPAddress);
                 var writeResult = await WriteAttributeAsync(
-                    device.IPAddress,
-                    SetAttributeSingleMessage.BuildSetIPAddressRequest(config.IPAddress, device.IPAddress),
+                    stream,
+                    sessionHandle,
+                    cipMessage,
                     "IP Address",
                     cancellationToken);
 
@@ -83,9 +122,11 @@ public class ConfigurationWriteService
                 ProgressUpdated?.Invoke(currentStep, totalSteps, "Subnet Mask");
                 _logger.LogConfig($"[{currentStep}/{totalSteps}] Writing Subnet Mask: {config.SubnetMask}");
 
+                var cipMessage = SetAttributeSingleMessage.BuildSetSubnetMaskRequest(config.SubnetMask, device.IPAddress);
                 var writeResult = await WriteAttributeAsync(
-                    device.IPAddress,
-                    SetAttributeSingleMessage.BuildSetSubnetMaskRequest(config.SubnetMask, device.IPAddress),
+                    stream,
+                    sessionHandle,
+                    cipMessage,
                     "Subnet Mask",
                     cancellationToken);
 
@@ -107,9 +148,11 @@ public class ConfigurationWriteService
                 ProgressUpdated?.Invoke(currentStep, totalSteps, "Gateway");
                 _logger.LogConfig($"[{currentStep}/{totalSteps}] Writing Gateway: {config.Gateway}");
 
+                var cipMessage = SetAttributeSingleMessage.BuildSetGatewayRequest(config.Gateway, device.IPAddress);
                 var writeResult = await WriteAttributeAsync(
-                    device.IPAddress,
-                    SetAttributeSingleMessage.BuildSetGatewayRequest(config.Gateway, device.IPAddress),
+                    stream,
+                    sessionHandle,
+                    cipMessage,
                     "Gateway",
                     cancellationToken);
 
@@ -131,9 +174,11 @@ public class ConfigurationWriteService
                 ProgressUpdated?.Invoke(currentStep, totalSteps, "Hostname");
                 _logger.LogConfig($"[{currentStep}/{totalSteps}] Writing Hostname: {config.Hostname}");
 
+                var cipMessage = SetAttributeSingleMessage.BuildSetHostnameRequest(config.Hostname, device.IPAddress);
                 var writeResult = await WriteAttributeAsync(
-                    device.IPAddress,
-                    SetAttributeSingleMessage.BuildSetHostnameRequest(config.Hostname, device.IPAddress),
+                    stream,
+                    sessionHandle,
+                    cipMessage,
                     "Hostname",
                     cancellationToken);
 
@@ -155,9 +200,11 @@ public class ConfigurationWriteService
                 ProgressUpdated?.Invoke(currentStep, totalSteps, "DNS Server");
                 _logger.LogConfig($"[{currentStep}/{totalSteps}] Writing DNS Server: {config.DnsServer}");
 
+                var cipMessage = SetAttributeSingleMessage.BuildSetDNSServerRequest(config.DnsServer, device.IPAddress);
                 var writeResult = await WriteAttributeAsync(
-                    device.IPAddress,
-                    SetAttributeSingleMessage.BuildSetDNSServerRequest(config.DnsServer, device.IPAddress),
+                    stream,
+                    sessionHandle,
+                    cipMessage,
                     "DNS Server",
                     cancellationToken);
 
@@ -185,93 +232,187 @@ public class ConfigurationWriteService
             result.SetError($"Unexpected error: {ex.Message}");
             return result;
         }
+        finally
+        {
+            // ODVA REQUIREMENT 3: UnregisterSession before disconnect (if session was registered)
+            if (stream != null && sessionHandle != 0)
+            {
+                try
+                {
+                    _logger.LogCIP("Sending UnregisterSession (Command 0x0066)");
+                    await UnregisterSessionAsync(stream, sessionHandle, cancellationToken);
+                    _logger.LogCIP("Session unregistered successfully");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"UnregisterSession failed (non-critical): {ex.Message}");
+                }
+            }
+
+            stream?.Close();
+            tcpClient?.Close();
+            _logger.LogCIP("TCP connection closed");
+        }
     }
 
     /// <summary>
-    /// Write a single attribute via TCP (REQ-3.5.5-004: 3-second timeout)
+    /// ODVA RegisterSession - Establish EtherNet/IP session (Command 0x0065)
+    /// MANDATORY before any CIP communication over TCP
     /// </summary>
+    /// <returns>Session Handle for use in subsequent messages</returns>
+    private async Task<uint> RegisterSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
+    {
+        // Build RegisterSession request (28 bytes total)
+        var request = new byte[28];
+        int offset = 0;
+
+        // Bytes 0-1: Command = 0x0065 (RegisterSession)
+        BitConverter.GetBytes(CMD_RegisterSession).CopyTo(request, offset);
+        offset += 2;
+
+        // Bytes 2-3: Length = 0x0004 (4 bytes of protocol version data)
+        BitConverter.GetBytes((ushort)4).CopyTo(request, offset);
+        offset += 2;
+
+        // Bytes 4-7: Session Handle = 0x00000000 (not assigned yet)
+        BitConverter.GetBytes((uint)0).CopyTo(request, offset);
+        offset += 4;
+
+        // Bytes 8-11: Status = 0x00000000
+        BitConverter.GetBytes((uint)0).CopyTo(request, offset);
+        offset += 4;
+
+        // Bytes 12-19: Sender Context (8 bytes, unique identifier)
+        var senderContext = GetSenderContext();
+        senderContext.CopyTo(request, offset);
+        offset += 8;
+
+        // Bytes 20-23: Options = 0x00000000
+        BitConverter.GetBytes((uint)0).CopyTo(request, offset);
+        offset += 4;
+
+        // Bytes 24-25: Protocol Version = 0x0001
+        BitConverter.GetBytes((ushort)1).CopyTo(request, offset);
+        offset += 2;
+
+        // Bytes 26-27: Option Flags = 0x0000
+        BitConverter.GetBytes((ushort)0).CopyTo(request, offset);
+
+        _logger.LogCIP($"RegisterSession request: {BitConverter.ToString(request)}");
+
+        // Send request
+        await stream.WriteAsync(request, cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+
+        // Read response (minimum 28 bytes)
+        var response = await ReadCompleteResponseAsync(stream, cancellationToken);
+
+        if (response.Length < 28)
+        {
+            throw new InvalidOperationException($"RegisterSession response too short: {response.Length} bytes");
+        }
+
+        _logger.LogCIP($"RegisterSession response: {BitConverter.ToString(response)}");
+
+        // Parse response
+        ushort responseCommand = BitConverter.ToUInt16(response, 0);
+        uint status = BitConverter.ToUInt32(response, 8);
+        uint sessionHandle = BitConverter.ToUInt32(response, 4);
+
+        // Validate response
+        if (responseCommand != CMD_RegisterSession)
+        {
+            throw new InvalidOperationException($"Invalid RegisterSession response command: 0x{responseCommand:X4}");
+        }
+
+        if (status != 0)
+        {
+            throw new InvalidOperationException($"RegisterSession failed with status: 0x{status:X8}");
+        }
+
+        if (sessionHandle == 0)
+        {
+            throw new InvalidOperationException("RegisterSession returned invalid Session Handle (0x00000000)");
+        }
+
+        return sessionHandle;
+    }
+
+    /// <summary>
+    /// ODVA UnregisterSession - Close EtherNet/IP session (Command 0x0066)
+    /// Should be called before TCP disconnect
+    /// </summary>
+    private async Task UnregisterSessionAsync(NetworkStream stream, uint sessionHandle, CancellationToken cancellationToken)
+    {
+        // Build UnregisterSession request (24 bytes, no data payload)
+        var request = new byte[24];
+        int offset = 0;
+
+        // Bytes 0-1: Command = 0x0066 (UnregisterSession)
+        BitConverter.GetBytes(CMD_UnregisterSession).CopyTo(request, offset);
+        offset += 2;
+
+        // Bytes 2-3: Length = 0x0000 (no data)
+        BitConverter.GetBytes((ushort)0).CopyTo(request, offset);
+        offset += 2;
+
+        // Bytes 4-7: Session Handle (from RegisterSession)
+        BitConverter.GetBytes(sessionHandle).CopyTo(request, offset);
+        offset += 4;
+
+        // Bytes 8-11: Status = 0x00000000
+        BitConverter.GetBytes((uint)0).CopyTo(request, offset);
+        offset += 4;
+
+        // Bytes 12-19: Sender Context (8 bytes)
+        var senderContext = GetSenderContext();
+        senderContext.CopyTo(request, offset);
+        offset += 8;
+
+        // Bytes 20-23: Options = 0x00000000
+        BitConverter.GetBytes((uint)0).CopyTo(request, offset);
+
+        _logger.LogCIP($"UnregisterSession request: {BitConverter.ToString(request)}");
+
+        // Send request (no response expected per ODVA spec)
+        await stream.WriteAsync(request, cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Write a single attribute via ODVA-compliant SendRRData with CPF structure
+    /// </summary>
+    /// <param name="stream">Open NetworkStream with registered session</param>
+    /// <param name="sessionHandle">Session Handle from RegisterSession</param>
+    /// <param name="cipMessage">Raw CIP message (Set_Attribute_Single with Unconnected Send wrapper)</param>
+    /// <param name="attributeName">Human-readable attribute name for logging</param>
     private async Task<AttributeWriteResult> WriteAttributeAsync(
-        IPAddress deviceIP,
-        byte[] requestPacket,
+        NetworkStream stream,
+        uint sessionHandle,
+        byte[] cipMessage,
         string attributeName,
         CancellationToken cancellationToken)
     {
-        TcpClient? tcpClient = null;
-        NetworkStream? stream = null;
-
         try
         {
-            // Create TCP connection to device
-            tcpClient = new TcpClient();
+            // Build complete ODVA-compliant SendRRData message with CPF structure
+            var sendRRDataPacket = BuildSendRRDataPacket(sessionHandle, cipMessage);
 
-            // REQ-3.5.5-004: 3-second timeout
-            using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            connectCts.CancelAfter(MessageTimeout);
-
-            await tcpClient.ConnectAsync(deviceIP, EtherNetIPPort, connectCts.Token);
-            _logger.LogCIP($"TCP connection established to {deviceIP}:{EtherNetIPPort}");
-
-            stream = tcpClient.GetStream();
-            stream.ReadTimeout = MessageTimeout;
-            stream.WriteTimeout = MessageTimeout;
+            _logger.LogCIP($"Sending {attributeName} write request ({sendRRDataPacket.Length} bytes total)");
+            _logger.LogCIP($"Request hex (first 128 bytes): {BitConverter.ToString(sendRRDataPacket, 0, Math.Min(128, sendRRDataPacket.Length))}");
 
             // Send request
-            _logger.LogCIP($"Sending {attributeName} write request ({requestPacket.Length} bytes)");
-            _logger.LogCIP($"Request hex (first 64 bytes): {BitConverter.ToString(requestPacket, 0, Math.Min(64, requestPacket.Length))}");
-
-            await stream.WriteAsync(requestPacket, cancellationToken);
+            await stream.WriteAsync(sendRRDataPacket, cancellationToken);
             await stream.FlushAsync(cancellationToken);
 
-            // Receive response
-            byte[] responseBuffer = new byte[1024];
+            // Read complete response
+            var response = await ReadCompleteResponseAsync(stream, cancellationToken);
 
-            using var readCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            readCts.CancelAfter(MessageTimeout);
+            _logger.LogCIP($"Received {attributeName} response ({response.Length} bytes)");
+            _logger.LogCIP($"Response hex (first 128 bytes): {BitConverter.ToString(response, 0, Math.Min(128, response.Length))}");
 
-            int bytesRead = await stream.ReadAsync(responseBuffer, readCts.Token);
-
-            if (bytesRead == 0)
-            {
-                _logger.LogError($"{attributeName} write: No response from device");
-                return new AttributeWriteResult
-                {
-                    AttributeName = attributeName,
-                    Success = false,
-                    ErrorMessage = "No response from device"
-                };
-            }
-
-            byte[] response = new byte[bytesRead];
-            Array.Copy(responseBuffer, response, bytesRead);
-
-            _logger.LogCIP($"Received {attributeName} response ({bytesRead} bytes)");
-            _logger.LogCIP($"Response hex (first 64 bytes): {BitConverter.ToString(response, 0, Math.Min(64, response.Length))}");
-
-            // Parse CIP status from response
-            byte statusCode = SetAttributeSingleMessage.ParseResponseStatus(response);
-            string statusMessage = CIPStatusCodes.GetStatusMessage(statusCode);
-
-            if (CIPStatusCodes.IsSuccess(statusCode))
-            {
-                _logger.LogConfig($"{attributeName} write successful");
-                return new AttributeWriteResult
-                {
-                    AttributeName = attributeName,
-                    Success = true
-                };
-            }
-            else
-            {
-                // REQ-3.5.5-010: Translate error code to human-readable message
-                _logger.LogError($"{attributeName} write failed: {statusMessage} (0x{statusCode:X2})");
-                return new AttributeWriteResult
-                {
-                    AttributeName = attributeName,
-                    Success = false,
-                    StatusCode = statusCode,
-                    ErrorMessage = statusMessage
-                };
-            }
+            // Parse response
+            return ParseAttributeResponse(response, sessionHandle, attributeName);
         }
         catch (TimeoutException)
         {
@@ -303,11 +444,338 @@ public class ConfigurationWriteService
                 ErrorMessage = ex.Message
             };
         }
-        finally
+    }
+
+    /// <summary>
+    /// Build ODVA-compliant SendRRData packet with CPF structure
+    /// Wraps CIP message in proper encapsulation header + CPF items
+    /// </summary>
+    private byte[] BuildSendRRDataPacket(uint sessionHandle, byte[] cipMessage)
+    {
+        // Calculate sizes
+        int cpfDataSize = 16 + cipMessage.Length; // CPF header (10) + 2 items (6) + CIP data
+        int totalSize = 24 + cpfDataSize; // Encapsulation header (24) + CPF data
+
+        var packet = new byte[totalSize];
+        int offset = 0;
+
+        // === ENCAPSULATION HEADER (24 bytes) ===
+
+        // Bytes 0-1: Command = 0x006F (SendRRData)
+        BitConverter.GetBytes(CMD_SendRRData).CopyTo(packet, offset);
+        offset += 2;
+
+        // Bytes 2-3: Length (size of CPF data)
+        BitConverter.GetBytes((ushort)cpfDataSize).CopyTo(packet, offset);
+        offset += 2;
+
+        // Bytes 4-7: Session Handle
+        BitConverter.GetBytes(sessionHandle).CopyTo(packet, offset);
+        offset += 4;
+
+        // Bytes 8-11: Status = 0x00000000
+        BitConverter.GetBytes((uint)0).CopyTo(packet, offset);
+        offset += 4;
+
+        // Bytes 12-19: Sender Context (unique per request)
+        var senderContext = GetSenderContext();
+        senderContext.CopyTo(packet, offset);
+        offset += 8;
+
+        // Bytes 20-23: Options = 0x00000000
+        BitConverter.GetBytes((uint)0).CopyTo(packet, offset);
+        offset += 4;
+
+        // === CPF (COMMON PACKET FORMAT) ===
+
+        // Bytes 0-3: Interface Handle = 0x00000000
+        BitConverter.GetBytes((uint)0).CopyTo(packet, offset);
+        offset += 4;
+
+        // Bytes 4-5: Timeout = 0x0000
+        BitConverter.GetBytes((ushort)0).CopyTo(packet, offset);
+        offset += 2;
+
+        // Bytes 6-7: Item Count = 0x0002 (2 items)
+        BitConverter.GetBytes((ushort)2).CopyTo(packet, offset);
+        offset += 2;
+
+        // === CPF ITEM 1: NULL ADDRESS ITEM ===
+
+        // Bytes 0-1: Type Code = 0x0000 (Null Address)
+        BitConverter.GetBytes(CPF_NullAddressItem).CopyTo(packet, offset);
+        offset += 2;
+
+        // Bytes 2-3: Length = 0x0000
+        BitConverter.GetBytes((ushort)0).CopyTo(packet, offset);
+        offset += 2;
+
+        // === CPF ITEM 2: UNCONNECTED DATA ITEM ===
+
+        // Bytes 0-1: Type Code = 0x00B2 (Unconnected Data)
+        BitConverter.GetBytes(CPF_UnconnectedDataItem).CopyTo(packet, offset);
+        offset += 2;
+
+        // Bytes 2-3: Length (size of CIP message)
+        BitConverter.GetBytes((ushort)cipMessage.Length).CopyTo(packet, offset);
+        offset += 2;
+
+        // Bytes 4+: CIP Message (Set_Attribute_Single with Unconnected Send wrapper)
+        cipMessage.CopyTo(packet, offset);
+
+        return packet;
+    }
+
+    /// <summary>
+    /// Parse ODVA-compliant SendRRData response with CPF structure
+    /// Extracts CIP status code from embedded response
+    /// </summary>
+    private AttributeWriteResult ParseAttributeResponse(byte[] response, uint expectedSessionHandle, string attributeName)
+    {
+        if (response.Length < 24)
         {
-            stream?.Close();
-            tcpClient?.Close();
+            return new AttributeWriteResult
+            {
+                AttributeName = attributeName,
+                Success = false,
+                ErrorMessage = $"Response too short: {response.Length} bytes (minimum 24 required)"
+            };
         }
+
+        // === VALIDATE ENCAPSULATION HEADER ===
+
+        ushort responseCommand = BitConverter.ToUInt16(response, 0);
+        ushort payloadLength = BitConverter.ToUInt16(response, 2);
+        uint responseSessionHandle = BitConverter.ToUInt32(response, 4);
+        uint encapsulationStatus = BitConverter.ToUInt32(response, 8);
+
+        if (responseCommand != CMD_SendRRData)
+        {
+            return new AttributeWriteResult
+            {
+                AttributeName = attributeName,
+                Success = false,
+                ErrorMessage = $"Invalid response command: 0x{responseCommand:X4} (expected 0x006F)"
+            };
+        }
+
+        if (responseSessionHandle != expectedSessionHandle)
+        {
+            _logger.LogWarning($"Session Handle mismatch: expected 0x{expectedSessionHandle:X8}, got 0x{responseSessionHandle:X8}");
+        }
+
+        if (encapsulationStatus != 0)
+        {
+            return new AttributeWriteResult
+            {
+                AttributeName = attributeName,
+                Success = false,
+                StatusCode = (byte)(encapsulationStatus & 0xFF),
+                ErrorMessage = $"Encapsulation error: 0x{encapsulationStatus:X8}"
+            };
+        }
+
+        // === PARSE CPF STRUCTURE ===
+
+        int offset = 24; // Start after encapsulation header
+
+        if (response.Length < offset + 10)
+        {
+            return new AttributeWriteResult
+            {
+                AttributeName = attributeName,
+                Success = false,
+                ErrorMessage = "Response too short for CPF header"
+            };
+        }
+
+        // Skip Interface Handle (4 bytes) and Timeout (2 bytes)
+        offset += 6;
+
+        // Read Item Count
+        ushort itemCount = BitConverter.ToUInt16(response, offset);
+        offset += 2;
+
+        // Find Unconnected Data Item (skip Null Address Item)
+        for (int i = 0; i < itemCount; i++)
+        {
+            if (response.Length < offset + 4)
+            {
+                return new AttributeWriteResult
+                {
+                    AttributeName = attributeName,
+                    Success = false,
+                    ErrorMessage = "Response truncated in CPF items"
+                };
+            }
+
+            ushort itemType = BitConverter.ToUInt16(response, offset);
+            ushort itemLength = BitConverter.ToUInt16(response, offset + 2);
+            offset += 4;
+
+            if (itemType == CPF_UnconnectedDataItem)
+            {
+                // Found CIP response data
+                if (response.Length < offset + itemLength)
+                {
+                    return new AttributeWriteResult
+                    {
+                        AttributeName = attributeName,
+                        Success = false,
+                        ErrorMessage = "Response truncated in CIP data"
+                    };
+                }
+
+                // Extract CIP response (inside Unconnected Send reply)
+                return ParseCIPResponse(response, offset, itemLength, attributeName);
+            }
+
+            // Skip this item's data
+            offset += itemLength;
+        }
+
+        return new AttributeWriteResult
+        {
+            AttributeName = attributeName,
+            Success = false,
+            ErrorMessage = "No Unconnected Data Item found in response"
+        };
+    }
+
+    /// <summary>
+    /// Parse CIP response inside CPF Unconnected Data Item
+    /// Extracts General Status code from CIP reply
+    /// </summary>
+    private AttributeWriteResult ParseCIPResponse(byte[] response, int offset, int length, string attributeName)
+    {
+        // CIP response is inside Unconnected Send Reply wrapper
+        // Skip Unconnected Send Reply service code and reserved byte
+        // Look for Set_Attribute_Single Reply (0x90)
+
+        if (length < 4)
+        {
+            return new AttributeWriteResult
+            {
+                AttributeName = attributeName,
+                Success = false,
+                ErrorMessage = "CIP response too short"
+            };
+        }
+
+        // Parse CIP status - varies by response structure
+        // Typically: Service Reply (1 byte) + Reserved (1 byte) + General Status (1 byte)
+        byte serviceReply = response[offset];
+        byte generalStatus = 0;
+
+        // Look for General Status in typical locations
+        if (length >= 8 && response[offset + 6] == 0x90) // Set_Attribute_Single Reply
+        {
+            generalStatus = response[offset + 8]; // General Status after reply service
+        }
+        else if (serviceReply == 0xD2) // Unconnected Send Reply
+        {
+            // General Status at offset + 2
+            if (length >= 3)
+            {
+                generalStatus = response[offset + 2];
+            }
+        }
+        else
+        {
+            // Try standard location
+            if (length >= 3)
+            {
+                generalStatus = response[offset + 2];
+            }
+        }
+
+        string statusMessage = CIPStatusCodes.GetStatusMessage(generalStatus);
+
+        if (CIPStatusCodes.IsSuccess(generalStatus))
+        {
+            _logger.LogConfig($"{attributeName} write successful (CIP status: 0x00)");
+            return new AttributeWriteResult
+            {
+                AttributeName = attributeName,
+                Success = true
+            };
+        }
+        else
+        {
+            _logger.LogError($"{attributeName} write failed: {statusMessage} (CIP status: 0x{generalStatus:X2})");
+            return new AttributeWriteResult
+            {
+                AttributeName = attributeName,
+                Success = false,
+                StatusCode = generalStatus,
+                ErrorMessage = statusMessage
+            };
+        }
+    }
+
+    /// <summary>
+    /// Read complete ODVA encapsulated response with proper framing
+    /// Reads exact number of bytes based on encapsulation header length field
+    /// </summary>
+    private async Task<byte[]> ReadCompleteResponseAsync(NetworkStream stream, CancellationToken cancellationToken)
+    {
+        // Read 24-byte encapsulation header first
+        var header = await ReadExactAsync(stream, 24, cancellationToken);
+
+        // Parse length field (bytes 2-3)
+        ushort payloadLength = BitConverter.ToUInt16(header, 2);
+
+        if (payloadLength == 0)
+        {
+            // No payload, return just header
+            return header;
+        }
+
+        // Read exact payload length
+        var payload = await ReadExactAsync(stream, payloadLength, cancellationToken);
+
+        // Combine header + payload
+        var fullResponse = new byte[24 + payloadLength];
+        header.CopyTo(fullResponse, 0);
+        payload.CopyTo(fullResponse, 24);
+
+        return fullResponse;
+    }
+
+    /// <summary>
+    /// Read exact number of bytes from stream (handles partial reads)
+    /// Critical for ODVA protocol compliance
+    /// </summary>
+    private async Task<byte[]> ReadExactAsync(NetworkStream stream, int count, CancellationToken cancellationToken)
+    {
+        byte[] buffer = new byte[count];
+        int offset = 0;
+
+        while (offset < count)
+        {
+            int bytesRead = await stream.ReadAsync(buffer.AsMemory(offset, count - offset), cancellationToken);
+
+            if (bytesRead == 0)
+            {
+                throw new IOException($"Connection closed by device. Read {offset}/{count} bytes.");
+            }
+
+            offset += bytesRead;
+        }
+
+        return buffer;
+    }
+
+    /// <summary>
+    /// Generate unique Sender Context for each request
+    /// Uses thread-safe counter to ensure uniqueness
+    /// </summary>
+    private byte[] GetSenderContext()
+    {
+        long contextValue = Interlocked.Increment(ref _contextCounter);
+        byte[] context = new byte[8];
+        BitConverter.GetBytes(contextValue).CopyTo(context, 0);
+        return context;
     }
 
     /// <summary>
