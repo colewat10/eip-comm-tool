@@ -58,9 +58,7 @@ public class BootPConfigurationService
             // Step 1: Send BootP BOOTREPLY (REQ-3.6.4-001, REQ-3.6.4-002, REQ-3.6.4-003)
             await _bootpServer.SendReplyAsync(request, assignedIP, subnetMask, gateway);
 
-            result.ReplyS
-
-ent = true;
+            result.ReplySent = true;
             _logger.LogBootP("BootP BOOTREPLY sent successfully");
 
             // Step 2: Wait for device to configure itself (REQ-3.6.4-005)
@@ -158,7 +156,7 @@ ent = true;
 
             if (status != 0)
             {
-                string statusMessage = CIPStatusCodes.GetStatusDescription((byte)(status & 0xFF));
+                string statusMessage = CIPStatusCodes.GetStatusMessage((byte)(status & 0xFF));
                 throw new InvalidOperationException(
                     $"CIP error response: Status 0x{status:X8} - {statusMessage}");
             }

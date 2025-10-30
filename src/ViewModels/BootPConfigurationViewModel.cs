@@ -217,7 +217,7 @@ public class BootPConfigurationViewModel : ViewModelBase
         if (TryParseIPAddress(IpAddress1, IpAddress2, IpAddress3, IpAddress4, out var ipAddress))
         {
             // Check if valid unicast IP (not 0.0.0.0 or 255.255.255.255)
-            if (ipAddress.Equals(IPAddress.Any) || ipAddress.Equals(IPAddress.Broadcast))
+            if (ipAddress!.Equals(IPAddress.Any) || ipAddress.Equals(IPAddress.Broadcast))
             {
                 IpValidationError = "Invalid IP address: Cannot be 0.0.0.0 or 255.255.255.255";
             }
@@ -234,7 +234,7 @@ public class BootPConfigurationViewModel : ViewModelBase
         // Validate subnet mask
         if (TryParseIPAddress(SubnetMask1, SubnetMask2, SubnetMask3, SubnetMask4, out var subnetMask))
         {
-            if (!IsValidSubnetMask(subnetMask))
+            if (!IsValidSubnetMask(subnetMask!))
             {
                 SubnetValidationError = "Invalid subnet mask: Must be a valid subnet mask (e.g., 255.255.255.0)";
             }
@@ -254,7 +254,7 @@ public class BootPConfigurationViewModel : ViewModelBase
             if (TryParseIPAddress(Gateway1, Gateway2, Gateway3, Gateway4, out var gateway))
             {
                 // Validate gateway is on same subnet as IP/Subnet
-                if (ipAddress != null && subnetMask != null && !IsOnSameSubnet(ipAddress, gateway, subnetMask))
+                if (ipAddress != null && subnetMask != null && !IsOnSameSubnet(ipAddress, gateway!, subnetMask))
                 {
                     GatewayValidationError = "Gateway must be on same subnet as IP address";
                 }

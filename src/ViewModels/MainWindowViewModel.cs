@@ -566,7 +566,7 @@ public class MainWindowViewModel : ViewModelBase
             }
 
             // REQ-3.6.1-001: Start UDP server listening on port 68
-            _bootpServer.Start(SelectedAdapter.IPAddress);
+            _bootpServer.Start(SelectedAdapter.IPAddress!);
 
             // REQ-3.6.1-003: Update status bar text
             StatusText = "BootP/DHCP Mode: Listening for factory-default device requests...";
@@ -630,7 +630,7 @@ public class MainWindowViewModel : ViewModelBase
                 _activityLogger.LogBootP($"BootP request received - displaying configuration dialog");
 
                 // Create ViewModel with request information
-                var viewModel = new BootPConfigurationViewModel(e.Request, SelectedAdapter!.IPAddress);
+                var viewModel = new BootPConfigurationViewModel(e);
 
                 // REQ-3.6.3-001: Display modal configuration dialog
                 var configDialog = new Views.BootPConfigurationDialog(viewModel)
@@ -681,8 +681,8 @@ public class MainWindowViewModel : ViewModelBase
             // REQ-3.6.4: Complete workflow (send reply → wait 2s → disable DHCP if requested)
             var result = await _bootpConfigurationService.ConfigureDeviceAsync(
                 request,
-                configResult.AssignedIP,
-                configResult.SubnetMask,
+                configResult.AssignedIP!,
+                configResult.SubnetMask!,
                 configResult.Gateway,
                 configResult.DisableDhcp);
 
