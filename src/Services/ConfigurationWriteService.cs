@@ -719,54 +719,104 @@ public class ConfigurationWriteService
 
     /// <summary>
     /// Parse CIP response inside CPF Unconnected Data Item
-    /// Extracts General Status code from CIP reply
+    /// Uses deterministic offset calculations per ODVA CIP specification
     /// </summary>
     private AttributeWriteResult ParseCIPResponse(byte[] response, int offset, int length, string attributeName)
     {
-        // CIP response is inside Unconnected Send Reply wrapper
-        // Skip Unconnected Send Reply service code and reserved byte
-        // Look for Set_Attribute_Single Reply (0x90)
+        // Unconnected Send Reply structure:
+        // Offset 0: Service Reply (0xD2 = 0x80 + 0x52)
+        // Offset 1: Reserved (0x00)
+        // Offset 2: General Status
+        // Offset 3: Additional Status Size
+        // Offset 4+: Additional Status (if size > 0)
+        // Offset N: Embedded message (if General Status = 0x00)
 
         if (length < 4)
         {
+            _logger.LogError($"CIP response too short: {length} bytes (minimum 4 required)");
             return new AttributeWriteResult
             {
                 AttributeName = attributeName,
                 Success = false,
-                ErrorMessage = "CIP response too short"
+                ErrorMessage = "Response too short for CIP structure"
             };
         }
 
-        // Parse CIP status - varies by response structure
-        // Typically: Service Reply (1 byte) + Reserved (1 byte) + General Status (1 byte)
         byte serviceReply = response[offset];
-        byte generalStatus = 0;
+        _logger.LogCIP($"Service Reply: 0x{serviceReply:X2}");
 
-        // Look for General Status in typical locations
-        if (length >= 8 && response[offset + 6] == 0x90) // Set_Attribute_Single Reply
+        // Validate service reply code
+        if (serviceReply != 0xD2) // Unconnected Send Reply (0x80 + 0x52)
         {
-            generalStatus = response[offset + 8]; // General Status after reply service
-        }
-        else if (serviceReply == 0xD2) // Unconnected Send Reply
-        {
-            // General Status at offset + 2
-            if (length >= 3)
+            _logger.LogError($"Invalid service reply: 0x{serviceReply:X2}, expected 0xD2");
+            return new AttributeWriteResult
             {
-                generalStatus = response[offset + 2];
-            }
+                AttributeName = attributeName,
+                Success = false,
+                ErrorMessage = $"Invalid service reply code: 0x{serviceReply:X2}"
+            };
         }
-        else
+
+        byte reserved = response[offset + 1];
+        byte generalStatus = response[offset + 2];
+        byte additionalStatusSize = response[offset + 3];
+
+        _logger.LogCIP($"Unconnected Send General Status: 0x{generalStatus:X2}");
+        _logger.LogCIP($"Additional Status Size: {additionalStatusSize}");
+
+        // Check Unconnected Send status
+        if (generalStatus != 0x00)
         {
-            // Try standard location
-            if (length >= 3)
+            string statusMessage = CIPStatusCodes.GetStatusMessage(generalStatus);
+            _logger.LogError($"Unconnected Send failed: {statusMessage}");
+            return new AttributeWriteResult
             {
-                generalStatus = response[offset + 2];
-            }
+                AttributeName = attributeName,
+                Success = false,
+                StatusCode = generalStatus,
+                ErrorMessage = $"Unconnected Send error: {statusMessage}"
+            };
         }
 
-        string statusMessage = CIPStatusCodes.GetStatusMessage(generalStatus);
+        // Skip additional status bytes
+        int embeddedOffset = offset + 4 + (additionalStatusSize * 2);
 
-        if (CIPStatusCodes.IsSuccess(generalStatus))
+        if (embeddedOffset + 3 > offset + length)
+        {
+            _logger.LogError("Response truncated before embedded message");
+            return new AttributeWriteResult
+            {
+                AttributeName = attributeName,
+                Success = false,
+                ErrorMessage = "Response truncated in embedded message"
+            };
+        }
+
+        // Parse embedded Set_Attribute_Single Reply
+        // Offset 0: Reply Service (0x90 = 0x80 + 0x10)
+        // Offset 1: Reserved
+        // Offset 2: General Status
+        // Offset 3: Additional Status Size
+
+        byte embeddedServiceReply = response[embeddedOffset];
+
+        if (embeddedServiceReply != 0x90) // Set_Attribute_Single Reply (0x80 + 0x10)
+        {
+            _logger.LogError($"Invalid embedded service reply: 0x{embeddedServiceReply:X2}, expected 0x90");
+            return new AttributeWriteResult
+            {
+                AttributeName = attributeName,
+                Success = false,
+                ErrorMessage = $"Invalid embedded reply code: 0x{embeddedServiceReply:X2}"
+            };
+        }
+
+        byte embeddedStatus = response[embeddedOffset + 2];
+        _logger.LogCIP($"Set_Attribute_Single General Status: 0x{embeddedStatus:X2}");
+
+        string embeddedStatusMessage = CIPStatusCodes.GetStatusMessage(embeddedStatus);
+
+        if (CIPStatusCodes.IsSuccess(embeddedStatus))
         {
             _logger.LogConfig($"{attributeName} write successful (CIP status: 0x00)");
             return new AttributeWriteResult
@@ -777,13 +827,13 @@ public class ConfigurationWriteService
         }
         else
         {
-            _logger.LogError($"{attributeName} write failed: {statusMessage} (CIP status: 0x{generalStatus:X2})");
+            _logger.LogError($"{attributeName} write failed: {embeddedStatusMessage} (CIP status: 0x{embeddedStatus:X2})");
             return new AttributeWriteResult
             {
                 AttributeName = attributeName,
                 Success = false,
-                StatusCode = generalStatus,
-                ErrorMessage = statusMessage
+                StatusCode = embeddedStatus,
+                ErrorMessage = embeddedStatusMessage
             };
         }
     }

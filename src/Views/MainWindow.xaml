@@ -23,6 +23,11 @@
         <vm:MainWindowViewModel/>
     </Window.DataContext>
 
+    <Window.InputBindings>
+        <!-- F1 key binding for User Manual (Phase 8) -->
+        <KeyBinding Key="F1" Command="{Binding ShowUserManualCommand}"/>
+    </Window.InputBindings>
+
     <DockPanel>
         <!-- Menu Bar -->
         <Menu DockPanel.Dock="Top" Height="20" Background="White">
@@ -43,10 +48,10 @@
                 <MenuItem Header="Refresh _Device Table" IsEnabled="False"/>
             </MenuItem>
             <MenuItem Header="_Help">
-                <MenuItem Header="_User Manual (F1)" IsEnabled="False"/>
-                <MenuItem Header="_CIP Protocol Reference" IsEnabled="False"/>
-                <MenuItem Header="_BootP/DHCP Reference" IsEnabled="False"/>
-                <MenuItem Header="_Troubleshooting Guide" IsEnabled="False"/>
+                <MenuItem Header="_User Manual (F1)" Command="{Binding ShowUserManualCommand}" InputGestureText="F1"/>
+                <MenuItem Header="_CIP Protocol Reference" Command="{Binding ShowCipReferenceCommand}"/>
+                <MenuItem Header="_BootP/DHCP Reference" Command="{Binding ShowBootPReferenceCommand}"/>
+                <MenuItem Header="_Troubleshooting Guide" Command="{Binding ShowTroubleshootingCommand}"/>
                 <Separator/>
                 <MenuItem Header="_About" Command="{Binding ShowAboutCommand}"/>
             </MenuItem>

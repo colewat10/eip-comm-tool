@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BootP/DHCP Reference</title>
+    <style>
+        body {
+            font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f8f8;
+        }
+        h1 { color: #0066cc; border-bottom: 3px solid #0066cc; padding-bottom: 10px; }
+        h2 { color: #0066cc; margin-top: 30px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+        h3 { color: #333; margin-top: 20px; }
+        code { background-color: #e8e8e8; padding: 2px 6px; border-radius: 3px; font-family: Consolas, monospace; }
+        .warning { background-color: #ffe6e6; border-left: 4px solid #cc0000; padding: 10px; margin: 15px 0; }
+        .note { background-color: #fffacd; border-left: 4px solid #ffa500; padding: 10px; margin: 15px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; background-color: white; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #0066cc; color: white; }
+        tr:nth-child(even) { background-color: #f8f8f8; }
+        .hex { font-family: Consolas, monospace; background-color: #e8e8e8; padding: 2px 4px; }
+    </style>
+</head>
+<body>
+    <h1>BootP/DHCP Protocol Reference</h1>
+
+    <h2>1. Overview</h2>
+    <p>
+        Bootstrap Protocol (BootP) and Dynamic Host Configuration Protocol (DHCP) are used to assign IP addresses
+        to network devices. Industrial devices often use BootP/DHCP for initial configuration when in factory-default state.
+    </p>
+
+    <div class="warning">
+        <strong>IMPORTANT:</strong> BootP/DHCP mode requires Administrator privileges to bind to UDP port 68.
+    </div>
+
+    <h2>2. BootP Packet Structure (RFC 951)</h2>
+
+    <h3>2.1 BootP Message Format (300 bytes minimum)</h3>
+    <table>
+        <tr>
+            <th>Offset</th>
+            <th>Size</th>
+            <th>Field</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td>0</td>
+            <td>1 byte</td>
+            <td>OP</td>
+            <td>1 = BOOTREQUEST, 2 = BOOTREPLY</td>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>1 byte</td>
+            <td>HTYPE</td>
+            <td>Hardware type (1 = Ethernet)</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>1 byte</td>
+            <td>HLEN</td>
+            <td>Hardware address length (6 for MAC)</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>1 byte</td>
+            <td>HOPS</td>
+            <td>Hops (0 for direct)</td>
+        </tr>
+        <tr>
+            <td>4-7</td>
+            <td>4 bytes</td>
+            <td>XID</td>
+            <td>Transaction ID (random, must match in reply)</td>
+        </tr>
+        <tr>
+            <td>8-9</td>
+            <td>2 bytes</td>
+            <td>SECS</td>
+            <td>Seconds elapsed</td>
+        </tr>
+        <tr>
+            <td>10-11</td>
+            <td>2 bytes</td>
+            <td>FLAGS</td>
+            <td>Bit 15 = Broadcast flag</td>
+        </tr>
+        <tr>
+            <td>12-15</td>
+            <td>4 bytes</td>
+            <td>CIADDR</td>
+            <td>Client IP address (0.0.0.0 if unknown)</td>
+        </tr>
+        <tr>
+            <td>16-19</td>
+            <td>4 bytes</td>
+            <td>YIADDR</td>
+            <td>Your IP address (assigned by server)</td>
+        </tr>
+        <tr>
+            <td>20-23</td>
+            <td>4 bytes</td>
+            <td>SIADDR</td>
+            <td>Server IP address</td>
+        </tr>
+        <tr>
+            <td>24-27</td>
+            <td>4 bytes</td>
+            <td>GIADDR</td>
+            <td>Gateway IP address</td>
+        </tr>
+        <tr>
+            <td>28-43</td>
+            <td>16 bytes</td>
+            <td>CHADDR</td>
+            <td>Client hardware (MAC) address</td>
+        </tr>
+        <tr>
+            <td>44-235</td>
+            <td>192 bytes</td>
+            <td>SNAME</td>
+            <td>Optional server host name</td>
+        </tr>
+        <tr>
+            <td>236-299</td>
+            <td>64 bytes</td>
+            <td>FILE</td>
+            <td>Boot file name</td>
+        </tr>
+        <tr>
+            <td>300+</td>
+            <td>Variable</td>
+            <td>OPTIONS</td>
+            <td>DHCP options (RFC 2132)</td>
+        </tr>
+    </table>
+
+    <h2>3. DHCP Options (RFC 2132)</h2>
+
+    <h3>3.1 Magic Cookie</h3>
+    <p>
+        DHCP options begin with a 4-byte magic cookie: <span class="hex">0x63 0x82 0x53 0x63</span>
+    </p>
+
+    <h3>3.2 Common DHCP Options</h3>
+    <table>
+        <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Length</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>Subnet Mask</td>
+            <td>4 bytes</td>
+            <td>Subnet mask for assigned IP</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>Router</td>
+            <td>4+ bytes</td>
+            <td>Default gateway address(es)</td>
+        </tr>
+        <tr>
+            <td>6</td>
+            <td>Domain Name Server</td>
+            <td>4+ bytes</td>
+            <td>DNS server address(es)</td>
+        </tr>
+        <tr>
+            <td>12</td>
+            <td>Host Name</td>
+            <td>Variable</td>
+            <td>Client hostname</td>
+        </tr>
+        <tr>
+            <td>53</td>
+            <td>DHCP Message Type</td>
+            <td>1 byte</td>
+            <td>1=DISCOVER, 2=OFFER, 3=REQUEST, 4=DECLINE, 5=ACK, 6=NAK, 7=RELEASE, 8=INFORM</td>
+        </tr>
+        <tr>
+            <td>54</td>
+            <td>Server Identifier</td>
+            <td>4 bytes</td>
+            <td>DHCP server IP address</td>
+        </tr>
+        <tr>
+            <td>255</td>
+            <td>End</td>
+            <td>0 bytes</td>
+            <td>End of options marker</td>
+        </tr>
+    </table>
+
+    <h3>3.3 Option Format</h3>
+    <p>Each option (except End) uses this format:</p>
+    <table>
+        <tr>
+            <th>Byte</th>
+            <th>Field</th>
+        </tr>
+        <tr>
+            <td>0</td>
+            <td>Option Code</td>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>Option Length (N)</td>
+        </tr>
+        <tr>
+            <td>2 to N+1</td>
+            <td>Option Data</td>
+        </tr>
+    </table>
+
+    <h2>4. DHCP Message Types</h2>
+    <table>
+        <tr>
+            <th>Type</th>
+            <th>Value</th>
+            <th>Direction</th>
+            <th>Purpose</th>
+        </tr>
+        <tr>
+            <td>DHCPDISCOVER</td>
+            <td>1</td>
+            <td>Client → Server</td>
+            <td>Client requests configuration</td>
+        </tr>
+        <tr>
+            <td>DHCPOFFER</td>
+            <td>2</td>
+            <td>Server → Client</td>
+            <td>Server offers configuration</td>
+        </tr>
+        <tr>
+            <td>DHCPREQUEST</td>
+            <td>3</td>
+            <td>Client → Server</td>
+            <td>Client accepts offered configuration</td>
+        </tr>
+        <tr>
+            <td>DHCPACK</td>
+            <td>5</td>
+            <td>Server → Client</td>
+            <td>Server confirms configuration</td>
+        </tr>
+    </table>
+
+    <h2>5. Tool Implementation</h2>
+
+    <h3>5.1 Server Port Binding</h3>
+    <p>
+        The tool binds to UDP port <strong>68</strong> (client port) to receive BootP requests.
+        This allows interception of requests before they reach a real DHCP server.
+    </p>
+
+    <div class="warning">
+        <strong>Administrator Privileges Required:</strong> Binding to port 68 requires elevated privileges on Windows.
+    </div>
+
+    <h3>5.2 Request Processing</h3>
+    <ol>
+        <li>Receive BOOTREQUEST on UDP port 68</li>
+        <li>Parse request to extract:
+            <ul>
+                <li>Transaction ID (XID)</li>
+                <li>Client MAC address (CHADDR)</li>
+                <li>FLAGS field (broadcast bit)</li>
+            </ul>
+        </li>
+        <li>Display request information to user</li>
+        <li>User enters IP, Subnet, Gateway</li>
+        <li>Send BOOTREPLY with configuration</li>
+    </ol>
+
+    <h3>5.3 Reply Construction</h3>
+    <table>
+        <tr>
+            <th>Field</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>OP</td>
+            <td>2 (BOOTREPLY)</td>
+        </tr>
+        <tr>
+            <td>XID</td>
+            <td>Copy from request</td>
+        </tr>
+        <tr>
+            <td>YIADDR</td>
+            <td>Assigned IP address</td>
+        </tr>
+        <tr>
+            <td>SIADDR</td>
+            <td>Server (tool) IP address</td>
+        </tr>
+        <tr>
+            <td>GIADDR</td>
+            <td>Gateway address (user-provided)</td>
+        </tr>
+        <tr>
+            <td>CHADDR</td>
+            <td>Copy from request</td>
+        </tr>
+        <tr>
+            <td>OPTIONS</td>
+            <td>Magic cookie + DHCP options</td>
+        </tr>
+    </table>
+
+    <h3>5.4 DHCP Options in Reply</h3>
+    <ul>
+        <li><strong>Option 53:</strong> DHCP Message Type = 2 (DHCPOFFER)</li>
+        <li><strong>Option 1:</strong> Subnet Mask</li>
+        <li><strong>Option 3:</strong> Router (Gateway) - if provided</li>
+        <li><strong>Option 255:</strong> End</li>
+    </ul>
+
+    <h3>5.5 Reply Transmission</h3>
+    <p>The tool determines reply destination based on FLAGS field:</p>
+    <ul>
+        <li><strong>Broadcast (FLAGS bit 15 = 1):</strong> Send to 255.255.255.255:68</li>
+        <li><strong>Unicast (FLAGS bit 15 = 0):</strong> Send to assigned IP address:68</li>
+    </ul>
+
+    <h2>6. Configuration Workflow</h2>
+
+    <h3>6.1 Complete Process</h3>
+    <ol>
+        <li><strong>Device Powers On:</strong> Factory-default device sends BOOTREQUEST</li>
+        <li><strong>Tool Receives Request:</strong> Displays in device table</li>
+        <li><strong>User Configures:</strong> Double-click device, enter IP/Subnet/Gateway</li>
+        <li><strong>Tool Sends BOOTREPLY:</strong> Device receives configuration</li>
+        <li><strong>Device Applies Settings:</strong> Waits 2 seconds</li>
+        <li><strong>Tool Disables DHCP (Optional):</strong> Sends CIP message to set Configuration Control = 0</li>
+        <li><strong>Device Switches to Static IP:</strong> No longer sends DHCP requests</li>
+    </ol>
+
+    <h3>6.2 "Disable DHCP Mode" Option</h3>
+    <p>
+        When enabled (default), the tool sends a CIP Set_Attribute_Single message to write
+        Configuration Control (Attribute 3) = <span class="hex">0x00000000</span> to TCP/IP Interface Object (Class 0xF5).
+        This switches the device from DHCP to static IP mode.
+    </p>
+
+    <div class="note">
+        <strong>Note:</strong> Not all devices support disabling DHCP via CIP. If the device doesn't support
+        this attribute, the write will fail but the IP configuration will still be applied.
+    </div>
+
+    <h2>7. Troubleshooting</h2>
+
+    <h3>7.1 No Requests Received</h3>
+    <ul>
+        <li>Verify application running as Administrator</li>
+        <li>Check Windows Firewall allows UDP port 68</li>
+        <li>Confirm device is in factory-default state (DHCP mode)</li>
+        <li>Verify device and tool on same network segment</li>
+        <li>Check device is powered and operational</li>
+    </ul>
+
+    <h3>7.2 Device Doesn't Apply Configuration</h3>
+    <ul>
+        <li>Check FLAGS field - may require broadcast reply</li>
+        <li>Verify subnet mask is correct for assigned IP</li>
+        <li>Some devices require specific DHCP options</li>
+        <li>Device may need power cycle to apply settings</li>
+    </ul>
+
+    <h3>7.3 DHCP Disable Fails</h3>
+    <ul>
+        <li>Device may not support CIP Configuration Control attribute</li>
+        <li>Check device documentation for configuration method</li>
+        <li>May need to configure static IP via device web interface</li>
+    </ul>
+
+    <h2>8. References</h2>
+    <ul>
+        <li>RFC 951: Bootstrap Protocol (BootP)</li>
+        <li>RFC 2131: Dynamic Host Configuration Protocol (DHCP)</li>
+        <li>RFC 2132: DHCP Options and BOOTP Vendor Extensions</li>
+        <li>ODVA TCP/IP Interface Object Specification</li>
+    </ul>
+
+    <hr>
+    <p style="text-align: center; color: #666; font-size: 0.9em;">
+        EtherNet/IP Commissioning Tool | BootP/DHCP Protocol Reference
+    </p>
+</body>
+</html>

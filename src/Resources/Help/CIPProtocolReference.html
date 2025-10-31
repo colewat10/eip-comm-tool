@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CIP Protocol Reference</title>
+    <style>
+        body {
+            font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f8f8;
+        }
+        h1 { color: #0066cc; border-bottom: 3px solid #0066cc; padding-bottom: 10px; }
+        h2 { color: #0066cc; margin-top: 30px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+        h3 { color: #333; margin-top: 20px; }
+        code { background-color: #e8e8e8; padding: 2px 6px; border-radius: 3px; font-family: Consolas, monospace; }
+        .note { background-color: #fffacd; border-left: 4px solid #ffa500; padding: 10px; margin: 15px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; background-color: white; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #0066cc; color: white; }
+        tr:nth-child(even) { background-color: #f8f8f8; }
+        .hex { font-family: Consolas, monospace; background-color: #e8e8e8; padding: 2px 4px; }
+    </style>
+</head>
+<body>
+    <h1>CIP Protocol Reference</h1>
+
+    <h2>1. Overview</h2>
+    <p>
+        The Common Industrial Protocol (CIP) is an industrial protocol used for industrial automation applications.
+        This tool implements CIP over EtherNet/IP for device discovery and configuration.
+    </p>
+
+    <h2>2. EtherNet/IP Encapsulation</h2>
+
+    <h3>2.1 Encapsulation Header (24 bytes)</h3>
+    <table>
+        <tr>
+            <th>Offset</th>
+            <th>Size</th>
+            <th>Field</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td>0-1</td>
+            <td>2 bytes</td>
+            <td>Command</td>
+            <td>0x0063 (List Identity), 0x006F (SendRRData), 0x0065 (RegisterSession), 0x0066 (UnregisterSession)</td>
+        </tr>
+        <tr>
+            <td>2-3</td>
+            <td>2 bytes</td>
+            <td>Length</td>
+            <td>Length of data that follows encapsulation header</td>
+        </tr>
+        <tr>
+            <td>4-7</td>
+            <td>4 bytes</td>
+            <td>Session Handle</td>
+            <td>Unique session identifier (0x00000000 for unconnected messages)</td>
+        </tr>
+        <tr>
+            <td>8-11</td>
+            <td>4 bytes</td>
+            <td>Status</td>
+            <td>Encapsulation status code</td>
+        </tr>
+        <tr>
+            <td>12-19</td>
+            <td>8 bytes</td>
+            <td>Sender Context</td>
+            <td>Information echoed back from target, used to match responses</td>
+        </tr>
+        <tr>
+            <td>20-23</td>
+            <td>4 bytes</td>
+            <td>Options</td>
+            <td>Protocol options (typically 0x00000000)</td>
+        </tr>
+    </table>
+
+    <h3>2.2 Command Codes</h3>
+    <table>
+        <tr>
+            <th>Command</th>
+            <th>Code</th>
+            <th>Purpose</th>
+            <th>Port</th>
+        </tr>
+        <tr>
+            <td>List Identity</td>
+            <td class="hex">0x0063</td>
+            <td>Device discovery (broadcast/unicast)</td>
+            <td>UDP 44818</td>
+        </tr>
+        <tr>
+            <td>RegisterSession</td>
+            <td class="hex">0x0065</td>
+            <td>Establish TCP session</td>
+            <td>TCP 44818</td>
+        </tr>
+        <tr>
+            <td>UnregisterSession</td>
+            <td class="hex">0x0066</td>
+            <td>Close TCP session</td>
+            <td>TCP 44818</td>
+        </tr>
+        <tr>
+            <td>SendRRData</td>
+            <td class="hex">0x006F</td>
+            <td>Send request/reply data</td>
+            <td>TCP 44818</td>
+        </tr>
+    </table>
+
+    <h2>3. CIP Services</h2>
+
+    <h3>3.1 Set_Attribute_Single (Service 0x10)</h3>
+    <p>Used to write individual object attributes for device configuration.</p>
+
+    <h4>Request Structure:</h4>
+    <table>
+        <tr>
+            <th>Offset</th>
+            <th>Field</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>0</td>
+            <td>Service Code</td>
+            <td class="hex">0x10</td>
+        </tr>
+        <tr>
+            <td>1-N</td>
+            <td>Request Path</td>
+            <td>EPATH to object (Class, Instance, Attribute)</td>
+        </tr>
+        <tr>
+            <td>N+1...</td>
+            <td>Attribute Data</td>
+            <td>New attribute value</td>
+        </tr>
+    </table>
+
+    <h4>Response Structure:</h4>
+    <table>
+        <tr>
+            <th>Offset</th>
+            <th>Field</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>0</td>
+            <td>Reply Service Code</td>
+            <td class="hex">0x90</td>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>Reserved</td>
+            <td class="hex">0x00</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>General Status</td>
+            <td>0x00 = Success, other = Error</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>Additional Status Size</td>
+            <td>Number of 16-bit words</td>
+        </tr>
+    </table>
+
+    <h3>3.2 Unconnected Send (Service 0x52)</h3>
+    <p>Wraps explicit messages for routing through connection manager.</p>
+
+    <h4>Response Structure:</h4>
+    <table>
+        <tr>
+            <th>Offset</th>
+            <th>Field</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>0</td>
+            <td>Reply Service Code</td>
+            <td class="hex">0xD2</td>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>Reserved</td>
+            <td class="hex">0x00</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>General Status</td>
+            <td>0x00 = Success, other = Error</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>Additional Status Size</td>
+            <td>Number of 16-bit words</td>
+        </tr>
+        <tr>
+            <td>4+N</td>
+            <td>Embedded Reply</td>
+            <td>Set_Attribute_Single reply</td>
+        </tr>
+    </table>
+
+    <h2>4. TCP/IP Interface Object (Class 0xF5)</h2>
+
+    <h3>4.1 Attributes Used by This Tool</h3>
+    <table>
+        <tr>
+            <th>Attribute ID</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Access</th>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>Configuration Control</td>
+            <td>DWORD</td>
+            <td>Set</td>
+        </tr>
+        <tr>
+            <td>5</td>
+            <td>IP Address</td>
+            <td>UDINT (4 bytes)</td>
+            <td>Get/Set</td>
+        </tr>
+        <tr>
+            <td>6</td>
+            <td>Subnet Mask</td>
+            <td>UDINT (4 bytes)</td>
+            <td>Get/Set</td>
+        </tr>
+        <tr>
+            <td>7</td>
+            <td>Gateway Address</td>
+            <td>UDINT (4 bytes)</td>
+            <td>Get/Set</td>
+        </tr>
+        <tr>
+            <td>8</td>
+            <td>Hostname</td>
+            <td>STRING</td>
+            <td>Get/Set</td>
+        </tr>
+        <tr>
+            <td>10</td>
+            <td>DNS Server</td>
+            <td>UDINT (4 bytes)</td>
+            <td>Get/Set</td>
+        </tr>
+    </table>
+
+    <h3>4.2 Configuration Control Values</h3>
+    <table>
+        <tr>
+            <th>Value</th>
+            <th>Meaning</th>
+        </tr>
+        <tr>
+            <td class="hex">0x00000001</td>
+            <td>DHCP mode enabled</td>
+        </tr>
+        <tr>
+            <td class="hex">0x00000000</td>
+            <td>Static IP mode (DHCP disabled)</td>
+        </tr>
+    </table>
+
+    <h2>5. CIP Status Codes</h2>
+    <table>
+        <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td class="hex">0x00</td>
+            <td>Success</td>
+            <td>Service succeeded</td>
+        </tr>
+        <tr>
+            <td class="hex">0x04</td>
+            <td>Path Destination Unknown</td>
+            <td>Device may not support this attribute</td>
+        </tr>
+        <tr>
+            <td class="hex">0x05</td>
+            <td>Path Segment Error</td>
+            <td>Invalid CIP path format</td>
+        </tr>
+        <tr>
+            <td class="hex">0x08</td>
+            <td>Service Not Supported</td>
+            <td>Device does not support Set_Attribute_Single</td>
+        </tr>
+        <tr>
+            <td class="hex">0x0F</td>
+            <td>Attribute Not Supported</td>
+            <td>Device does not have this configuration attribute</td>
+        </tr>
+        <tr>
+            <td class="hex">0x13</td>
+            <td>Not Enough Data</td>
+            <td>Configuration value is incomplete</td>
+        </tr>
+        <tr>
+            <td class="hex">0x14</td>
+            <td>Attribute Not Settable</td>
+            <td>Configuration value is read-only</td>
+        </tr>
+        <tr>
+            <td class="hex">0x1C</td>
+            <td>Privilege Violation</td>
+            <td>Device requires authorization</td>
+        </tr>
+        <tr>
+            <td class="hex">0x26</td>
+            <td>Invalid Parameter</td>
+            <td>Configuration value format is incorrect</td>
+        </tr>
+    </table>
+
+    <h2>6. Common Packet Format (CPF)</h2>
+    <p>
+        CPF encapsulates CIP messages within EtherNet/IP SendRRData commands.
+    </p>
+
+    <h3>6.1 CPF Header</h3>
+    <table>
+        <tr>
+            <th>Offset</th>
+            <th>Field</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td>0-3</td>
+            <td>Interface Handle</td>
+            <td>0x00000000 for CIP</td>
+        </tr>
+        <tr>
+            <td>4-5</td>
+            <td>Timeout</td>
+            <td>0x0000 (not used in unconnected messages)</td>
+        </tr>
+        <tr>
+            <td>6-7</td>
+            <td>Item Count</td>
+            <td>Number of CPF items (typically 2)</td>
+        </tr>
+    </table>
+
+    <h3>6.2 CPF Item Types</h3>
+    <table>
+        <tr>
+            <th>Type Code</th>
+            <th>Name</th>
+            <th>Purpose</th>
+        </tr>
+        <tr>
+            <td class="hex">0x0000</td>
+            <td>Null Address Item</td>
+            <td>No address info (unconnected)</td>
+        </tr>
+        <tr>
+            <td class="hex">0x00B2</td>
+            <td>Unconnected Data Item</td>
+            <td>Contains CIP message</td>
+        </tr>
+    </table>
+
+    <h2>7. Configuration Workflow</h2>
+    <ol>
+        <li><strong>Establish TCP Connection:</strong> Connect to device IP address on port 44818</li>
+        <li><strong>Register Session:</strong> Send RegisterSession (0x0065) command</li>
+        <li><strong>Write Attributes:</strong> Send Set_Attribute_Single for each parameter via SendRRData
+            <ul>
+                <li>IP Address (Attribute 5)</li>
+                <li>Subnet Mask (Attribute 6)</li>
+                <li>Gateway (Attribute 7) - optional</li>
+                <li>Hostname (Attribute 8) - optional</li>
+                <li>DNS Server (Attribute 10) - optional</li>
+            </ul>
+        </li>
+        <li><strong>Unregister Session:</strong> Send UnregisterSession (0x0066) command</li>
+        <li><strong>Close Connection:</strong> Close TCP socket</li>
+    </ol>
+
+    <div class="note">
+        <strong>Note:</strong> Each attribute write has a 3-second timeout with 100ms delay between writes.
+        If any write fails, subsequent writes are skipped.
+    </div>
+
+    <h2>8. References</h2>
+    <ul>
+        <li>ODVA CIP Volume 1: Common Industrial Protocol Specification</li>
+        <li>ODVA CIP Volume 2: EtherNet/IP Adaptation of CIP</li>
+        <li>ODVA TCP/IP Interface Object Specification (Class 0xF5)</li>
+    </ul>
+
+    <hr>
+    <p style="text-align: center; color: #666; font-size: 0.9em;">
+        EtherNet/IP Commissioning Tool | CIP Protocol Reference
+    </p>
+</body>
+</html>

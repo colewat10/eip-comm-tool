@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Manual - EtherNet/IP Commissioning Tool</title>
+    <style>
+        body {
+            font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f8f8;
+        }
+        h1 {
+            color: #0066cc;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #0066cc;
+            margin-top: 30px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+        }
+        h3 {
+            color: #333;
+            margin-top: 20px;
+        }
+        code {
+            background-color: #e8e8e8;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: Consolas, monospace;
+        }
+        .note {
+            background-color: #fffacd;
+            border-left: 4px solid #ffa500;
+            padding: 10px;
+            margin: 15px 0;
+        }
+        .warning {
+            background-color: #ffe6e6;
+            border-left: 4px solid #cc0000;
+            padding: 10px;
+            margin: 15px 0;
+        }
+        .tip {
+            background-color: #e6f3ff;
+            border-left: 4px solid #0066cc;
+            padding: 10px;
+            margin: 15px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background-color: white;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #0066cc;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f8f8;
+        }
+        ul, ol {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+    </style>
+</head>
+<body>
+    <h1>EtherNet/IP Commissioning Tool - User Manual</h1>
+
+    <h2>1. Overview</h2>
+    <p>
+        The EtherNet/IP Commissioning Tool is a Windows desktop application designed to streamline the commissioning
+        and troubleshooting of industrial Ethernet devices. It consolidates device discovery, IP configuration, and
+        BootP/DHCP server functionality into a single unified interface.
+    </p>
+
+    <h3>1.1 Key Features</h3>
+    <ul>
+        <li>Network device discovery using EtherNet/IP CIP List Identity protocol</li>
+        <li>Direct IP configuration via CIP Set_Attribute_Single messages</li>
+        <li>Built-in BootP/DHCP server for factory-default devices</li>
+        <li>Real-time device status monitoring with auto-browse</li>
+        <li>Comprehensive activity logging and export</li>
+    </ul>
+
+    <h3>1.2 Supported Devices</h3>
+    <p>Compatible with devices from:</p>
+    <ul>
+        <li>Allen-Bradley (ControlLogix, CompactLogix, Stratix, PowerFlex, POINT I/O)</li>
+        <li>SICK (Industrial sensors with EtherNet/IP)</li>
+        <li>Banner (Industrial sensors and indicators)</li>
+        <li>Pepperl+Fuchs (IO-Link masters, field devices)</li>
+        <li>Turck (TBIP series IO-Link Masters)</li>
+        <li>Any device supporting EtherNet/IP and CIP TCP/IP Interface Object (Class 0xF5)</li>
+    </ul>
+
+    <h2>2. Getting Started</h2>
+
+    <h3>2.1 Installation Requirements</h3>
+    <ul>
+        <li>Windows 10 (version 1809+) or Windows 11</li>
+        <li>.NET 8 Runtime</li>
+        <li>Ethernet network adapter</li>
+        <li>Administrator rights (required for BootP/DHCP mode only)</li>
+    </ul>
+
+    <h3>2.2 Firewall Configuration</h3>
+    <div class="warning">
+        <strong>IMPORTANT:</strong> EtherNet/IP discovery requires UDP port 44818 to be open in Windows Firewall.
+    </div>
+    <p>Run the included PowerShell script as Administrator:</p>
+    <code>.\scripts\Configure-FirewallForEtherNetIP.ps1</code>
+
+    <h2>3. User Interface</h2>
+
+    <h3>3.1 Network Interface Selection</h3>
+    <p>
+        Select the network adapter connected to your industrial network from the NIC dropdown in the toolbar.
+        The application automatically selects the first available adapter on startup.
+    </p>
+    <div class="tip">
+        <strong>Tip:</strong> Use the refresh button (⟳) to detect newly connected adapters without restarting.
+    </div>
+
+    <h3>3.2 Operating Modes</h3>
+    <p>The application operates in two mutually exclusive modes:</p>
+
+    <table>
+        <tr>
+            <th>Mode</th>
+            <th>Purpose</th>
+            <th>Privileges Required</th>
+        </tr>
+        <tr>
+            <td><strong>EtherNet/IP</strong></td>
+            <td>Discover and configure devices with existing IP addresses</td>
+            <td>Standard user</td>
+        </tr>
+        <tr>
+            <td><strong>BootP/DHCP</strong></td>
+            <td>Assign IP addresses to factory-default devices</td>
+            <td>Administrator</td>
+        </tr>
+    </table>
+
+    <h3>3.3 Auto-Browse Feature</h3>
+    <p>
+        When enabled (default), the application automatically scans for devices at a configurable interval (1-60 seconds, default 5).
+        Devices that don't respond for 3 consecutive scans are automatically removed from the list.
+    </p>
+
+    <h2>4. Device Discovery (EtherNet/IP Mode)</h2>
+
+    <h3>4.1 Scanning for Devices</h3>
+    <ol>
+        <li>Ensure EtherNet/IP mode is selected</li>
+        <li>Select the appropriate network adapter</li>
+        <li>Click "Scan Now" or enable Auto-Browse</li>
+        <li>Devices will appear in the table within 3 seconds</li>
+    </ol>
+
+    <h3>4.2 Device Table Information</h3>
+    <table>
+        <tr>
+            <th>Column</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td>#</td>
+            <td>Row number</td>
+        </tr>
+        <tr>
+            <td>MAC Address</td>
+            <td>Device hardware address (XX:XX:XX:XX:XX:XX)</td>
+        </tr>
+        <tr>
+            <td>IP Address</td>
+            <td>Current IPv4 address</td>
+        </tr>
+        <tr>
+            <td>Subnet Mask</td>
+            <td>Current subnet mask</td>
+        </tr>
+        <tr>
+            <td>Vendor</td>
+            <td>Device manufacturer name or hex vendor ID</td>
+        </tr>
+        <tr>
+            <td>Model</td>
+            <td>Device model/product name</td>
+        </tr>
+        <tr>
+            <td>Status</td>
+            <td>OK / Link-Local (169.254.x.x) / Conflict</td>
+        </tr>
+    </table>
+
+    <h3>4.3 Status Indicators</h3>
+    <ul>
+        <li><strong>OK:</strong> Device has valid configuration (black text)</li>
+        <li><strong>Link-Local:</strong> Device using auto-assigned 169.254.x.x address (yellow highlight)</li>
+        <li><strong>Conflict:</strong> IP address conflict detected (red highlight)</li>
+    </ul>
+
+    <h2>5. Device Configuration</h2>
+
+    <h3>5.1 Configuring a Device</h3>
+    <ol>
+        <li>Select device in table (single click)</li>
+        <li>Double-click device row or click "Configure Selected Device"</li>
+        <li>Enter configuration in dialog:
+            <ul>
+                <li><strong>IP Address:</strong> Required (4 octets, 0-255)</li>
+                <li><strong>Subnet Mask:</strong> Required</li>
+                <li><strong>Gateway:</strong> Optional (must be on same subnet)</li>
+                <li><strong>Hostname:</strong> Optional (64 chars max, alphanumeric, hyphens, underscores)</li>
+                <li><strong>DNS Server:</strong> Optional (must be on same subnet)</li>
+            </ul>
+        </li>
+        <li>Click "Apply" to send configuration</li>
+        <li>Review confirmation dialog showing current vs. new settings</li>
+        <li>Click "Apply Changes" to execute</li>
+    </ol>
+
+    <div class="note">
+        <strong>Note:</strong> Configuration is written sequentially. If any attribute fails, remaining writes are skipped.
+    </div>
+
+    <h3>5.2 Configuration Progress</h3>
+    <p>
+        The progress dialog shows each attribute being written (IP → Subnet → Gateway → Hostname → DNS).
+        Each write has a 3-second timeout with 100ms delay between attributes.
+    </p>
+
+    <h2>6. BootP/DHCP Mode</h2>
+
+    <div class="warning">
+        <strong>IMPORTANT:</strong> BootP/DHCP mode requires Administrator privileges to bind to UDP port 68.
+    </div>
+
+    <h3>6.1 Using BootP/DHCP Mode</h3>
+    <ol>
+        <li>Right-click application and select "Run as Administrator"</li>
+        <li>Select BootP/DHCP mode</li>
+        <li>Connect factory-default device to network</li>
+        <li>Device will send BootP request (appears in table)</li>
+        <li>Double-click device to open configuration dialog</li>
+        <li>Enter IP, Subnet, and Gateway</li>
+        <li>Leave "Disable DHCP mode after assignment" checked (recommended)</li>
+        <li>Click "Assign & Configure"</li>
+    </ol>
+
+    <h3>6.2 BootP Process</h3>
+    <ol>
+        <li>Application sends BootP OFFER to device</li>
+        <li>Waits 2 seconds for device to apply settings</li>
+        <li>Sends CIP message to disable DHCP mode (if checkbox enabled)</li>
+        <li>Device switches to static IP configuration</li>
+    </ol>
+
+    <h2>7. Activity Log</h2>
+
+    <h3>7.1 Viewing the Log</h3>
+    <p>Access via: <strong>Tools → Activity Log Viewer</strong></p>
+
+    <h3>7.2 Log Categories</h3>
+    <table>
+        <tr>
+            <th>Category</th>
+            <th>Color</th>
+            <th>Purpose</th>
+        </tr>
+        <tr>
+            <td>INFO</td>
+            <td>Black</td>
+            <td>General informational messages</td>
+        </tr>
+        <tr>
+            <td>SCAN</td>
+            <td>Brown</td>
+            <td>Device scanning operations</td>
+        </tr>
+        <tr>
+            <td>DISC</td>
+            <td>Teal</td>
+            <td>Device discovery events</td>
+        </tr>
+        <tr>
+            <td>CONFIG</td>
+            <td>Blue</td>
+            <td>Configuration operations</td>
+        </tr>
+        <tr>
+            <td>CIP</td>
+            <td>Dark Green</td>
+            <td>CIP protocol messages</td>
+        </tr>
+        <tr>
+            <td>BOOTP</td>
+            <td>Purple</td>
+            <td>BootP/DHCP operations</td>
+        </tr>
+        <tr>
+            <td>ERROR</td>
+            <td>Red</td>
+            <td>Error messages</td>
+        </tr>
+        <tr>
+            <td>WARN</td>
+            <td>Orange</td>
+            <td>Warning messages</td>
+        </tr>
+    </table>
+
+    <h3>7.3 Filtering and Export</h3>
+    <ul>
+        <li>Use category checkboxes to filter displayed entries</li>
+        <li>Click "Export Log" to save filtered entries to UTF-8 text file</li>
+        <li>Click "Clear Log" to remove all entries (cannot be undone)</li>
+    </ul>
+
+    <h2>8. Troubleshooting</h2>
+
+    <h3>8.1 No Devices Found</h3>
+    <ol>
+        <li>Verify Windows Firewall allows UDP port 44818</li>
+        <li>Check network cable connections</li>
+        <li>Confirm device is powered and operational</li>
+        <li>Verify correct network adapter is selected</li>
+        <li>Check subnet mask matches device subnet</li>
+    </ol>
+
+    <h3>8.2 Configuration Failed</h3>
+    <ul>
+        <li><strong>Timeout:</strong> Device not responding (check network, firewall)</li>
+        <li><strong>Attribute Not Supported:</strong> Device doesn't support that configuration parameter</li>
+        <li><strong>Attribute Not Settable:</strong> Parameter is read-only on this device</li>
+        <li><strong>Service Not Supported:</strong> Device doesn't support CIP Set_Attribute_Single</li>
+    </ul>
+
+    <h3>8.3 BootP Mode Unavailable</h3>
+    <p>
+        BootP/DHCP mode requires Administrator privileges. Right-click application icon and select
+        "Run as Administrator" to enable this mode.
+    </p>
+
+    <h2>9. Keyboard Shortcuts</h2>
+    <table>
+        <tr>
+            <th>Key</th>
+            <th>Action</th>
+        </tr>
+        <tr>
+            <td>F1</td>
+            <td>Open User Manual (this help)</td>
+        </tr>
+        <tr>
+            <td>F5</td>
+            <td>Refresh device list</td>
+        </tr>
+        <tr>
+            <td>Tab</td>
+            <td>Navigate between controls</td>
+        </tr>
+        <tr>
+            <td>Enter</td>
+            <td>Activate selected button/control</td>
+        </tr>
+        <tr>
+            <td>Esc</td>
+            <td>Cancel/close dialog</td>
+        </tr>
+    </table>
+
+    <h2>10. Support</h2>
+    <p>
+        For additional help and troubleshooting:
+    </p>
+    <ul>
+        <li><strong>Troubleshooting Guide:</strong> Help → Troubleshooting Guide</li>
+        <li><strong>CIP Protocol Reference:</strong> Help → CIP Protocol Reference</li>
+        <li><strong>BootP/DHCP Reference:</strong> Help → BootP/DHCP Reference</li>
+        <li><strong>Project Documentation:</strong> See docs/ folder in installation directory</li>
+    </ul>
+
+    <hr>
+    <p style="text-align: center; color: #666; font-size: 0.9em;">
+        EtherNet/IP Commissioning Tool | Version 1.0.0 | © 2025
+    </p>
+</body>
+</html>

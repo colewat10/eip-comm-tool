@@ -1,0 +1,141 @@
+<Window x:Class="EtherNetIPTool.Views.ActivityLogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:EtherNetIPTool.ViewModels"
+        xmlns:services="clr-namespace:EtherNetIPTool.Services"
+        mc:Ignorable="d"
+        Title="Activity Log"
+        Height="600"
+        Width="800"
+        WindowStartupLocation="CenterOwner"
+        Background="#F0F0F0"
+        FontFamily="Segoe UI"
+        FontSize="9pt"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <!-- Converter for log entry color coding (REQ-5.11) -->
+        <Style x:Key="LogEntryTextBlockStyle" TargetType="TextBlock">
+            <Style.Triggers>
+                <!-- ERROR: Red -->
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static services:LogCategory.ERROR}">
+                    <Setter Property="Foreground" Value="#CC0000"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+                <!-- WARN: Orange -->
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static services:LogCategory.WARN}">
+                    <Setter Property="Foreground" Value="#FF8C00"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+                <!-- CONFIG: Blue -->
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static services:LogCategory.CONFIG}">
+                    <Setter Property="Foreground" Value="#0066CC"/>
+                </DataTrigger>
+                <!-- CIP: Dark Green -->
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static services:LogCategory.CIP}">
+                    <Setter Property="Foreground" Value="#008000"/>
+                </DataTrigger>
+                <!-- BOOTP: Purple -->
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static services:LogCategory.BOOTP}">
+                    <Setter Property="Foreground" Value="#800080"/>
+                </DataTrigger>
+                <!-- DISC: Teal -->
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static services:LogCategory.DISC}">
+                    <Setter Property="Foreground" Value="#008080"/>
+                </DataTrigger>
+                <!-- SCAN: Brown -->
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static services:LogCategory.SCAN}">
+                    <Setter Property="Foreground" Value="#8B4513"/>
+                </DataTrigger>
+                <!-- INFO: Black (default) -->
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static services:LogCategory.INFO}">
+                    <Setter Property="Foreground" Value="Black"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- Filter Toolbar -->
+        <Border DockPanel.Dock="Top" Background="#E8E8E8" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Padding="10">
+            <StackPanel>
+                <TextBlock Text="Category Filters:" FontWeight="Bold" Margin="0,0,0,5"/>
+                <WrapPanel>
+                    <CheckBox Content="INFO" IsChecked="{Binding ShowInfo}" Margin="0,0,15,0"
+                              ToolTip="Show informational messages"/>
+                    <CheckBox Content="SCAN" IsChecked="{Binding ShowScan}" Margin="0,0,15,0"
+                              ToolTip="Show scan operation messages"/>
+                    <CheckBox Content="DISC" IsChecked="{Binding ShowDisc}" Margin="0,0,15,0"
+                              ToolTip="Show device discovery messages"/>
+                    <CheckBox Content="CONFIG" IsChecked="{Binding ShowConfig}" Margin="0,0,15,0"
+                              ToolTip="Show configuration operation messages"/>
+                    <CheckBox Content="CIP" IsChecked="{Binding ShowCip}" Margin="0,0,15,0"
+                              ToolTip="Show CIP protocol messages"/>
+                    <CheckBox Content="BOOTP" IsChecked="{Binding ShowBootp}" Margin="0,0,15,0"
+                              ToolTip="Show BootP/DHCP messages"/>
+                    <CheckBox Content="ERROR" IsChecked="{Binding ShowError}" Margin="0,0,15,0"
+                              ToolTip="Show error messages" Foreground="#CC0000" FontWeight="SemiBold"/>
+                    <CheckBox Content="WARN" IsChecked="{Binding ShowWarn}" Margin="0,0,15,0"
+                              ToolTip="Show warning messages" Foreground="#FF8C00" FontWeight="SemiBold"/>
+                </WrapPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                    <Button Content="Select All" Command="{Binding SelectAllCommand}" Width="80" Height="22" Margin="0,0,5,0"
+                            ToolTip="Enable all category filters"/>
+                    <Button Content="Deselect All" Command="{Binding DeselectAllCommand}" Width="80" Height="22"
+                            ToolTip="Disable all category filters"/>
+                    <TextBlock Margin="15,0,0,0" VerticalAlignment="Center">
+                        <Run Text="Showing "/>
+                        <Run Text="{Binding FilteredEntryCount, Mode=OneWay}" FontWeight="Bold"/>
+                        <Run Text=" of "/>
+                        <Run Text="{Binding TotalEntryCount, Mode=OneWay}" FontWeight="Bold"/>
+                        <Run Text=" entries"/>
+                    </TextBlock>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Button Panel -->
+        <Border DockPanel.Dock="Bottom" Background="#E8E8E8" BorderBrush="#D0D0D0" BorderThickness="0,1,0,0" Padding="10">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Export Log"
+                        Command="{Binding ExportLogCommand}"
+                        Width="100"
+                        Height="24"
+                        Margin="0,0,5,0"
+                        ToolTip="Export filtered log entries to text file (UTF-8 encoding)"/>
+                <Button Content="Clear Log"
+                        Command="{Binding ClearLogCommand}"
+                        Width="100"
+                        Height="24"
+                        Margin="0,0,5,0"
+                        ToolTip="Clear all log entries (cannot be undone)"/>
+                <Button Content="Close"
+                        Command="{Binding CloseCommand}"
+                        CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}"
+                        Width="100"
+                        Height="24"
+                        IsDefault="True"
+                        ToolTip="Close activity log viewer"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Log Display Area (REQ-5.11) -->
+        <Border BorderBrush="#D0D0D0" BorderThickness="1" Margin="10" Background="White">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Entries}" Padding="5">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding FormattedEntry}"
+                                       FontFamily="Consolas"
+                                       FontSize="9pt"
+                                       Style="{StaticResource LogEntryTextBlockStyle}"
+                                       TextWrapping="NoWrap"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</Window>

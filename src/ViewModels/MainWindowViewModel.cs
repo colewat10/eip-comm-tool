@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 using EtherNetIPTool.Models;
 using EtherNetIPTool.Services;
@@ -71,6 +72,12 @@ public class MainWindowViewModel : ViewModelBase
         ExitApplicationCommand = new RelayCommand(_ => ExitApplication());
         ShowActivityLogCommand = new RelayCommand(_ => ShowActivityLog());
         ShowAboutCommand = new RelayCommand(_ => ShowAbout());
+
+        // Help commands (Phase 8)
+        ShowUserManualCommand = new RelayCommand(_ => ShowUserManual());
+        ShowCipReferenceCommand = new RelayCommand(_ => ShowCipReference());
+        ShowBootPReferenceCommand = new RelayCommand(_ => ShowBootPReference());
+        ShowTroubleshootingCommand = new RelayCommand(_ => ShowTroubleshooting());
 
         // Device commands (Phase 3)
         ConfigureDeviceCommand = new RelayCommand(_ => ConfigureDevice(), _ => SelectedDevice != null);
@@ -282,6 +289,26 @@ public class MainWindowViewModel : ViewModelBase
     /// Command to show about dialog
     /// </summary>
     public ICommand ShowAboutCommand { get; }
+
+    /// <summary>
+    /// Command to show user manual (Phase 8)
+    /// </summary>
+    public ICommand ShowUserManualCommand { get; }
+
+    /// <summary>
+    /// Command to show CIP protocol reference (Phase 8)
+    /// </summary>
+    public ICommand ShowCipReferenceCommand { get; }
+
+    /// <summary>
+    /// Command to show BootP/DHCP reference (Phase 8)
+    /// </summary>
+    public ICommand ShowBootPReferenceCommand { get; }
+
+    /// <summary>
+    /// Command to show troubleshooting guide (Phase 8)
+    /// </summary>
+    public ICommand ShowTroubleshootingCommand { get; }
 
     /// <summary>
     /// Command to perform device scan (REQ-3.3.3-001)
@@ -763,13 +790,18 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Show activity log viewer window
+    /// Show activity log viewer window (Phase 8 - REQ-3.7-004)
     /// </summary>
     private void ShowActivityLog()
     {
         _activityLogger.LogInfo("Opening activity log viewer");
-        // TODO: Open activity log window (Phase 8)
-        StatusText = "Activity log viewer (coming in Phase 8)";
+
+        var logWindow = new Views.ActivityLogWindow(_activityLogger)
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        logWindow.ShowDialog();
     }
 
     /// <summary>
@@ -788,6 +820,58 @@ public class MainWindowViewModel : ViewModelBase
             "About",
             System.Windows.MessageBoxButton.OK,
             System.Windows.MessageBoxImage.Information);
+    }
+
+    /// <summary>
+    /// Show user manual help (Phase 8)
+    /// </summary>
+    private void ShowUserManual()
+    {
+        _activityLogger.LogInfo("Opening user manual");
+        var helpWindow = new Views.HelpWindow("UserManual.html")
+        {
+            Owner = Application.Current.MainWindow
+        };
+        helpWindow.ShowDialog();
+    }
+
+    /// <summary>
+    /// Show CIP protocol reference help (Phase 8)
+    /// </summary>
+    private void ShowCipReference()
+    {
+        _activityLogger.LogInfo("Opening CIP protocol reference");
+        var helpWindow = new Views.HelpWindow("CIPProtocolReference.html")
+        {
+            Owner = Application.Current.MainWindow
+        };
+        helpWindow.ShowDialog();
+    }
+
+    /// <summary>
+    /// Show BootP/DHCP reference help (Phase 8)
+    /// </summary>
+    private void ShowBootPReference()
+    {
+        _activityLogger.LogInfo("Opening BootP/DHCP reference");
+        var helpWindow = new Views.HelpWindow("BootPReference.html")
+        {
+            Owner = Application.Current.MainWindow
+        };
+        helpWindow.ShowDialog();
+    }
+
+    /// <summary>
+    /// Show troubleshooting guide help (Phase 8)
+    /// </summary>
+    private void ShowTroubleshooting()
+    {
+        _activityLogger.LogInfo("Opening troubleshooting guide");
+        var helpWindow = new Views.HelpWindow("TroubleshootingGuide.md")
+        {
+            Owner = Application.Current.MainWindow
+        };
+        helpWindow.ShowDialog();
     }
 
     /// <summary>
