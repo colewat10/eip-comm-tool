@@ -39,6 +39,7 @@
             </MenuItem>
             <MenuItem Header="_Tools">
                 <MenuItem Header="_Activity Log Viewer" Command="{Binding ShowActivityLogCommand}"/>
+                <MenuItem Header="_Port Statistics" Command="{Binding ShowPortStatisticsCommand}" ToolTip="View real-time network port statistics for selected device"/>
                 <Separator/>
                 <MenuItem Header="Export Device List to CSV" IsEnabled="False"/>
                 <MenuItem Header="Clear Device List" IsEnabled="False"/>
@@ -260,6 +261,9 @@
                             <MenuItem Header="Configure Device"
                                       Command="{Binding ConfigureDeviceCommand}"
                                       ToolTip="Open configuration dialog for this device"/>
+                            <MenuItem Header="Port Statistics"
+                                      Command="{Binding ShowPortStatisticsCommand}"
+                                      ToolTip="View real-time network port statistics"/>
                             <Separator/>
                             <MenuItem Header="Copy MAC Address"
                                       Command="{Binding CopyMacAddressCommand}"

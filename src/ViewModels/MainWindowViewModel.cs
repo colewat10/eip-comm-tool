@@ -71,6 +71,7 @@ public class MainWindowViewModel : ViewModelBase
         ClearDeviceListCommand = new RelayCommand(_ => ClearDeviceList(), _ => Devices.Any());
         ExitApplicationCommand = new RelayCommand(_ => ExitApplication());
         ShowActivityLogCommand = new RelayCommand(_ => ShowActivityLog());
+        ShowPortStatisticsCommand = new RelayCommand(_ => ShowPortStatistics(), _ => SelectedDevice != null);
         ShowAboutCommand = new RelayCommand(_ => ShowAbout());
 
         // Help commands (Phase 8)
@@ -284,6 +285,11 @@ public class MainWindowViewModel : ViewModelBase
     /// Command to show activity log viewer
     /// </summary>
     public ICommand ShowActivityLogCommand { get; }
+
+    /// <summary>
+    /// Command to show port statistics for selected device
+    /// </summary>
+    public ICommand ShowPortStatisticsCommand { get; }
 
     /// <summary>
     /// Command to show about dialog
@@ -802,6 +808,38 @@ public class MainWindowViewModel : ViewModelBase
         };
 
         logWindow.ShowDialog();
+    }
+
+    /// <summary>
+    /// Show port statistics window for selected device
+    /// Displays real-time network port metrics including packets, errors, and collisions
+    /// </summary>
+    private void ShowPortStatistics()
+    {
+        if (SelectedDevice == null)
+            return;
+
+        try
+        {
+            _activityLogger.LogInfo($"Opening port statistics for device: {SelectedDevice.MacAddressString}");
+
+            var statsWindow = new Views.PortStatisticsWindow(SelectedDevice, _activityLogger)
+            {
+                Owner = Application.Current.MainWindow
+            };
+
+            // Show non-modal to allow multiple windows and continued app usage
+            statsWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            _activityLogger.LogError($"Failed to open port statistics window: {ex.Message}", ex);
+            MessageBox.Show(
+                $"Failed to open port statistics:\n\n{ex.Message}",
+                "Port Statistics Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     /// <summary>

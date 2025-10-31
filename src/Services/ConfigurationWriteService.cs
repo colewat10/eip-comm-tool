@@ -299,6 +299,267 @@ public class ConfigurationWriteService
     }
 
     /// <summary>
+    /// Read a single CIP attribute via Get_Attribute_Single (Service 0x0E)
+    /// Used for reading port statistics from Ethernet Link Object (Class 0xF6)
+    /// and other diagnostic data from CIP objects
+    /// </summary>
+    /// <param name="device">Target device</param>
+    /// <param name="classId">CIP Class ID (e.g., 0xF5 for TCP/IP Interface, 0xF6 for Ethernet Link)</param>
+    /// <param name="instanceId">Instance ID (typically 1 for port 1)</param>
+    /// <param name="attributeId">Attribute ID to read</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>AttributeReadResult containing raw attribute data or error information</returns>
+    public async Task<AttributeReadResult> ReadAttributeAsync(
+        Device device,
+        byte classId,
+        byte instanceId,
+        byte attributeId,
+        CancellationToken cancellationToken = default)
+    {
+        if (device == null)
+            throw new ArgumentNullException(nameof(device));
+
+        _logger.LogCIP($"Reading attribute: Class 0x{classId:X2}, Instance {instanceId}, Attribute {attributeId} from {device.IPAddressString}");
+
+        TcpClient? tcpClient = null;
+        NetworkStream? stream = null;
+        uint sessionHandle = 0;
+
+        try
+        {
+            // 1. Establish TCP connection
+            tcpClient = new TcpClient();
+
+            using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            connectCts.CancelAfter(MessageTimeout);
+
+            _logger.LogCIP($"Connecting to {device.IPAddress}:{EtherNetIPPort}");
+
+            try
+            {
+                await tcpClient.ConnectAsync(device.IPAddress, EtherNetIPPort, connectCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, "Connection timeout");
+            }
+            catch (SocketException ex)
+            {
+                return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, $"Connection failed: {ex.Message}");
+            }
+
+            stream = tcpClient.GetStream();
+            stream.ReadTimeout = MessageTimeout;
+            stream.WriteTimeout = MessageTimeout;
+
+            // 2. RegisterSession
+            sessionHandle = await RegisterSessionAsync(stream, cancellationToken);
+            _logger.LogCIP($"Session registered: Handle = 0x{sessionHandle:X8}");
+
+            // 3. Build Get_Attribute_Single request
+            byte[] cipMessage;
+            if (classId == 0xF5)
+            {
+                cipMessage = GetAttributeSingleMessage.BuildGetTcpIpAttributeRequest(attributeId, device.IPAddress);
+            }
+            else if (classId == 0xF6)
+            {
+                cipMessage = GetAttributeSingleMessage.BuildGetEthernetLinkAttributeRequest(instanceId, attributeId, device.IPAddress);
+            }
+            else
+            {
+                return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, $"Unsupported class ID: 0x{classId:X2}");
+            }
+
+            // 4. Wrap in SendRRData and send
+            var sendRRDataPacket = BuildSendRRDataPacket(sessionHandle, cipMessage);
+            _logger.LogCIP($"Sending Get_Attribute_Single request ({sendRRDataPacket.Length} bytes)");
+
+            await stream.WriteAsync(sendRRDataPacket, cancellationToken);
+            await stream.FlushAsync(cancellationToken);
+
+            // 5. Read response
+            var response = await ReadCompleteResponseAsync(stream, cancellationToken);
+            _logger.LogCIP($"Received response ({response.Length} bytes)");
+
+            // 6. Parse response
+            var result = ParseAttributeReadResponse(response, sessionHandle, classId, instanceId, attributeId);
+
+            // 7. UnregisterSession
+            await UnregisterSessionAsync(stream, sessionHandle, cancellationToken);
+
+            return result;
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogError($"Attribute read timeout after {MessageTimeout}ms");
+            return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, "Timeout");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Attribute read failed: {ex.Message}", ex);
+            return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, ex.Message);
+        }
+        finally
+        {
+            // Cleanup (UnregisterSession already called if successful)
+            if (stream != null && sessionHandle != 0)
+            {
+                try
+                {
+                    await UnregisterSessionAsync(stream, sessionHandle, cancellationToken);
+                }
+                catch { /* Already logged or non-critical */ }
+            }
+            stream?.Close();
+            tcpClient?.Close();
+        }
+    }
+
+    /// <summary>
+    /// Parse Get_Attribute_Single response and extract attribute data
+    /// Similar to ParseAttributeResponse but for read operations (Service 0x8E reply)
+    /// </summary>
+    private AttributeReadResult ParseAttributeReadResponse(
+        byte[] response,
+        uint expectedSessionHandle,
+        byte classId,
+        byte instanceId,
+        byte attributeId)
+    {
+        if (response.Length < 24)
+        {
+            return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF,
+                $"Response too short: {response.Length} bytes");
+        }
+
+        // Validate encapsulation header
+        ushort responseCommand = BitConverter.ToUInt16(response, 0);
+        uint responseSessionHandle = BitConverter.ToUInt32(response, 4);
+        uint encapsulationStatus = BitConverter.ToUInt32(response, 8);
+
+        if (responseCommand != CMD_SendRRData)
+        {
+            return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF,
+                $"Invalid response command: 0x{responseCommand:X4}");
+        }
+
+        if (encapsulationStatus != 0)
+        {
+            return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, (byte)(encapsulationStatus & 0xFF),
+                $"Encapsulation error: 0x{encapsulationStatus:X8}");
+        }
+
+        // Parse CPF structure
+        int offset = 24; // Start after encapsulation header
+
+        if (response.Length < offset + 10)
+        {
+            return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, "Response too short for CPF");
+        }
+
+        // Skip CPF header (Interface Handle + Timeout + Item Count)
+        offset += 6;
+        ushort itemCount = BitConverter.ToUInt16(response, offset);
+        offset += 2;
+
+        // Find Unconnected Data Item (Type 0x00B2)
+        for (int i = 0; i < itemCount; i++)
+        {
+            if (response.Length < offset + 4)
+                break;
+
+            ushort itemType = BitConverter.ToUInt16(response, offset);
+            ushort itemLength = BitConverter.ToUInt16(response, offset + 2);
+            offset += 4;
+
+            if (itemType == CPF_UnconnectedDataItem)
+            {
+                // Found Unconnected Data Item - parse CIP response inside
+                if (response.Length < offset + itemLength)
+                {
+                    return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, "Response truncated in CIP data");
+                }
+
+                // Parse Unconnected Send Reply
+                if (itemLength < 4)
+                {
+                    return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, "CIP response too short");
+                }
+
+                byte serviceReply = response[offset];
+                byte generalStatus = response[offset + 2];
+                byte additionalStatusSize = response[offset + 3];
+
+                if (serviceReply != 0xD2) // Unconnected Send Reply (0x80 + 0x52)
+                {
+                    return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF,
+                        $"Invalid service reply: 0x{serviceReply:X2}");
+                }
+
+                if (generalStatus != 0x00)
+                {
+                    string statusMessage = CIPStatusCodes.GetStatusMessage(generalStatus);
+                    return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, generalStatus,
+                        $"Unconnected Send error: {statusMessage}");
+                }
+
+                // Skip to embedded Get_Attribute_Single Reply
+                int embeddedOffset = offset + 4 + (additionalStatusSize * 2);
+
+                if (embeddedOffset + 3 > offset + itemLength)
+                {
+                    return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, "Response truncated in embedded message");
+                }
+
+                // Parse embedded Get_Attribute_Single Reply
+                // Offset 0: Reply Service (0x8E = 0x80 + 0x0E)
+                // Offset 1: Reserved
+                // Offset 2: General Status
+                // Offset 3: Additional Status Size
+                // Offset 4+: Attribute Data (if status = 0x00)
+
+                byte embeddedServiceReply = response[embeddedOffset];
+                byte embeddedStatus = response[embeddedOffset + 2];
+                byte embeddedAdditionalStatusSize = response[embeddedOffset + 3];
+
+                if (embeddedServiceReply != 0x8E && embeddedServiceReply != 0xCE) // Get_Attribute_Single Reply
+                {
+                    return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF,
+                        $"Invalid embedded service reply: 0x{embeddedServiceReply:X2}");
+                }
+
+                if (embeddedStatus != 0x00)
+                {
+                    string statusMessage = CIPStatusCodes.GetStatusMessage(embeddedStatus);
+                    _logger.LogWarning($"Get_Attribute_Single failed: {statusMessage} (Status: 0x{embeddedStatus:X2})");
+                    return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, embeddedStatus, statusMessage);
+                }
+
+                // Success - extract attribute data
+                int dataOffset = embeddedOffset + 4 + (embeddedAdditionalStatusSize * 2);
+                int dataLength = (offset + itemLength) - dataOffset;
+
+                if (dataLength < 0)
+                {
+                    return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, "Invalid data length");
+                }
+
+                byte[] attributeData = new byte[dataLength];
+                Array.Copy(response, dataOffset, attributeData, 0, dataLength);
+
+                _logger.LogCIP($"Attribute read successful: {dataLength} bytes of data");
+                return AttributeReadResult.CreateSuccess(classId, instanceId, attributeId, attributeData);
+            }
+
+            // Skip this item's data
+            offset += itemLength;
+        }
+
+        return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF, "No Unconnected Data Item found");
+    }
+
+    /// <summary>
     /// ODVA RegisterSession - Establish EtherNet/IP session (Command 0x0065)
     /// MANDATORY before any CIP communication over TCP
     /// </summary>
