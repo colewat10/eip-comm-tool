@@ -6,19 +6,33 @@ namespace EtherNetIPTool.Core.CIP;
 
 /// <summary>
 /// CIP Set_Attribute_Single message builder (REQ-3.5.5-001, REQ-3.5.5-003)
-/// Builds Unconnected Send messages for setting TCP/IP Interface Object attributes
+/// Builds Unconnected Send CIP payloads for setting TCP/IP Interface Object attributes
+///
+/// IMPORTANT: This class returns CIP payload data (Unconnected Send wrapper) WITHOUT
+/// EtherNet/IP encapsulation. The caller (ConfigurationWriteService) is responsible for
+/// wrapping the CIP payload in SendRRData encapsulation with proper session handle.
+///
+/// Per ODVA Volume 2 Section 2-4: Encapsulation layer must use session handle from
+/// RegisterSession, which is only available in ConfigurationWriteService context.
+///
 /// Based on PRD Section 4.1.3
 /// </summary>
 public static class SetAttributeSingleMessage
 {
-    // Encapsulation header constants
+    // Legacy encapsulation constants - no longer used, kept for reference
+    [Obsolete("Encapsulation is now handled by ConfigurationWriteService with proper session handle")]
     private const ushort CommandSendRRData = 0x006F;  // SendRRData command
-    private const uint SessionHandle = 0x00000000;    // No session for unconnected
+    [Obsolete("Session handle must come from RegisterSession, not hardcoded to 0x00000000")]
+    private const uint SessionHandle = 0x00000000;    // WRONG: Should use RegisterSession handle
+    [Obsolete("Encapsulation is now handled by ConfigurationWriteService")]
     private const uint Status = 0x00000000;
+    [Obsolete("Encapsulation is now handled by ConfigurationWriteService")]
     private const uint Options = 0x00000000;
 
-    // CPF Item types
+    // Legacy CPF constants - no longer used, kept for reference
+    [Obsolete("CPF structure is now handled by ConfigurationWriteService")]
     private const ushort CPFTypeNullAddress = 0x0000;
+    [Obsolete("CPF structure is now handled by ConfigurationWriteService")]
     private const ushort CPFTypeUnconnectedData = 0x00B2;
 
     // CIP Service codes
@@ -39,10 +53,13 @@ public static class SetAttributeSingleMessage
     /// Build Set_Attribute_Single request for Configuration Control (Attribute 3)
     /// REQ-3.6.4-006: Set to static IP mode (0x00000001) to disable DHCP
     /// Value: 0x00000001 = Static IP, 0x00000000 = DHCP/BootP mode
+    ///
+    /// Returns: Unconnected Send CIP payload (NOT encapsulated)
+    /// Caller must wrap in SendRRData encapsulation with proper session handle
     /// </summary>
     /// <param name="setToStaticIP">True to enable static IP mode (disable DHCP), false for DHCP mode</param>
-    /// <param name="targetDeviceIP">IP address of target device</param>
-    /// <returns>CIP message bytes ready to send</returns>
+    /// <param name="targetDeviceIP">IP address of target device (used for routing)</param>
+    /// <returns>Unconnected Send CIP payload (without encapsulation)</returns>
     public static byte[] BuildSetConfigurationControlRequest(bool setToStaticIP, IPAddress targetDeviceIP)
     {
         // DWORD value: 0x00000001 = Static IP, 0x00000000 = DHCP
@@ -61,7 +78,16 @@ public static class SetAttributeSingleMessage
     /// <summary>
     /// Build Set_Attribute_Single request for IP Address (Attribute 5)
     /// REQ-3.5.5-002: IP Address (4 bytes, network byte order)
+    ///
+    /// Per ODVA CIP Vol 1: IP addresses are transmitted in NETWORK BYTE ORDER (big-endian).
+    /// This is different from CIP multi-byte values which use little-endian.
+    ///
+    /// Returns: Unconnected Send CIP payload (NOT encapsulated)
+    /// Caller must wrap in SendRRData encapsulation with proper session handle
     /// </summary>
+    /// <param name="ipAddress">IP address to set on device</param>
+    /// <param name="targetDeviceIP">Current IP address of target device (used for routing)</param>
+    /// <returns>Unconnected Send CIP payload (without encapsulation)</returns>
     public static byte[] BuildSetIPAddressRequest(IPAddress ipAddress, IPAddress targetDeviceIP)
     {
         if (ipAddress == null)
@@ -77,7 +103,13 @@ public static class SetAttributeSingleMessage
     /// <summary>
     /// Build Set_Attribute_Single request for Subnet Mask (Attribute 6)
     /// REQ-3.5.5-002: Subnet Mask (4 bytes, network byte order)
+    ///
+    /// Returns: Unconnected Send CIP payload (NOT encapsulated)
+    /// Caller must wrap in SendRRData encapsulation with proper session handle
     /// </summary>
+    /// <param name="subnetMask">Subnet mask to set on device</param>
+    /// <param name="targetDeviceIP">Current IP address of target device (used for routing)</param>
+    /// <returns>Unconnected Send CIP payload (without encapsulation)</returns>
     public static byte[] BuildSetSubnetMaskRequest(IPAddress subnetMask, IPAddress targetDeviceIP)
     {
         if (subnetMask == null)
@@ -93,7 +125,13 @@ public static class SetAttributeSingleMessage
     /// <summary>
     /// Build Set_Attribute_Single request for Gateway (Attribute 7)
     /// REQ-3.5.5-002: Gateway Address (4 bytes, network byte order)
+    ///
+    /// Returns: Unconnected Send CIP payload (NOT encapsulated)
+    /// Caller must wrap in SendRRData encapsulation with proper session handle
     /// </summary>
+    /// <param name="gateway">Gateway address to set on device</param>
+    /// <param name="targetDeviceIP">Current IP address of target device (used for routing)</param>
+    /// <returns>Unconnected Send CIP payload (without encapsulation)</returns>
     public static byte[] BuildSetGatewayRequest(IPAddress gateway, IPAddress targetDeviceIP)
     {
         if (gateway == null)
@@ -109,7 +147,13 @@ public static class SetAttributeSingleMessage
     /// <summary>
     /// Build Set_Attribute_Single request for Hostname (Attribute 8)
     /// REQ-3.5.5-002: Hostname (String, length-prefixed ASCII)
+    ///
+    /// Returns: Unconnected Send CIP payload (NOT encapsulated)
+    /// Caller must wrap in SendRRData encapsulation with proper session handle
     /// </summary>
+    /// <param name="hostname">Hostname to set on device (max 64 characters)</param>
+    /// <param name="targetDeviceIP">Current IP address of target device (used for routing)</param>
+    /// <returns>Unconnected Send CIP payload (without encapsulation)</returns>
     public static byte[] BuildSetHostnameRequest(string hostname, IPAddress targetDeviceIP)
     {
         if (string.IsNullOrWhiteSpace(hostname))
@@ -133,7 +177,13 @@ public static class SetAttributeSingleMessage
     /// <summary>
     /// Build Set_Attribute_Single request for DNS Server (Attribute 10)
     /// REQ-3.5.5-002: DNS Server (4 bytes, network byte order)
+    ///
+    /// Returns: Unconnected Send CIP payload (NOT encapsulated)
+    /// Caller must wrap in SendRRData encapsulation with proper session handle
     /// </summary>
+    /// <param name="dnsServer">DNS server address to set on device</param>
+    /// <param name="targetDeviceIP">Current IP address of target device (used for routing)</param>
+    /// <returns>Unconnected Send CIP payload (without encapsulation)</returns>
     public static byte[] BuildSetDNSServerRequest(IPAddress dnsServer, IPAddress targetDeviceIP)
     {
         if (dnsServer == null)
@@ -148,21 +198,30 @@ public static class SetAttributeSingleMessage
 
     /// <summary>
     /// Build Set_Attribute_Single request for any attribute
-    /// PRD Section 4.1.3: Complete message structure
+    ///
+    /// Returns Unconnected Send CIP payload WITHOUT encapsulation.
+    /// ConfigurationWriteService will wrap this in SendRRData encapsulation
+    /// with proper session handle from RegisterSession.
+    ///
+    /// PRD Section 4.1.3: Unconnected Send message structure
+    /// ODVA Volume 2 Section 2-4: Encapsulation layer separate from CIP layer
     /// </summary>
+    /// <param name="targetDeviceIP">Target device IP (used for routing path)</param>
+    /// <param name="attributeId">TCP/IP Interface Object attribute ID</param>
+    /// <param name="attributeData">Attribute data bytes (format varies by attribute)</param>
+    /// <returns>Unconnected Send CIP payload (without encapsulation or CPF wrapping)</returns>
     private static byte[] BuildSetAttributeRequest(IPAddress targetDeviceIP, byte attributeId, byte[] attributeData)
     {
         // Build embedded Set_Attribute_Single message
         byte[] embeddedMessage = BuildEmbeddedSetAttributeMessage(attributeId, attributeData);
 
-        // Build Unconnected Send wrapper
-        byte[] unconnectedSendData = BuildUnconnectedSendData(embeddedMessage, targetDeviceIP);
-
-        // Build CPF (Common Packet Format) structure
-        byte[] cpfData = BuildCPFData(unconnectedSendData);
-
-        // Build complete encapsulation packet
-        return BuildEncapsulationPacket(cpfData);
+        // Build Unconnected Send wrapper and return it directly
+        // ConfigurationWriteService.BuildSendRRDataPacket() will:
+        // 1. Add encapsulation header with proper session handle
+        // 2. Add CPF structure (Interface Handle + Timeout + Item Count)
+        // 3. Add CPF items (Null Address + Unconnected Data)
+        // 4. Place this Unconnected Send data inside Unconnected Data item
+        return BuildUnconnectedSendData(embeddedMessage, targetDeviceIP);
     }
 
     /// <summary>
@@ -243,67 +302,32 @@ public static class SetAttributeSingleMessage
         return ms.ToArray();
     }
 
-    /// <summary>
-    /// Build CPF (Common Packet Format) structure
-    /// PRD Section 4.1.3: Null Address Item + Unconnected Data Item
-    /// </summary>
-    private static byte[] BuildCPFData(byte[] unconnectedSendData)
-    {
-        using var ms = new MemoryStream();
-        using var writer = new BinaryWriter(ms);
-
-        // Item Count: 2 items
-        writer.Write((ushort)2);
-
-        // Item 1: Null Address Item (Type 0x0000)
-        writer.Write(CPFTypeNullAddress);
-        writer.Write((ushort)0);  // Length = 0 for null address
-
-        // Item 2: Unconnected Data Item (Type 0x00B2)
-        writer.Write(CPFTypeUnconnectedData);
-        writer.Write((ushort)unconnectedSendData.Length);
-        writer.Write(unconnectedSendData);
-
-        return ms.ToArray();
-    }
-
-    /// <summary>
-    /// Build complete EtherNet/IP encapsulation packet
-    /// PRD Section 4.1.3: Encapsulation Command 0x006F (SendRRData)
-    /// </summary>
-    private static byte[] BuildEncapsulationPacket(byte[] cpfData)
-    {
-        using var ms = new MemoryStream();
-        using var writer = new BinaryWriter(ms);
-
-        // Encapsulation Header (24 bytes)
-        writer.Write(CommandSendRRData);           // Command: 0x006F
-        writer.Write((ushort)cpfData.Length);      // Length
-        writer.Write(SessionHandle);               // Session Handle: 0x00000000
-        writer.Write(Status);                      // Status: 0x00000000
-
-        // Sender Context: Use timestamp as unique identifier
-        long timestamp = DateTime.Now.Ticks;
-        writer.Write(timestamp);
-
-        writer.Write(Options);                     // Options: 0x00000000
-
-        // Interface Handle: 0x00000000 for CIP
-        writer.Write((uint)0);
-
-        // Timeout: 0x0000 (use default)
-        writer.Write((ushort)0);
-
-        // CPF Data
-        writer.Write(cpfData);
-
-        return ms.ToArray();
-    }
+    // REMOVED: BuildCPFData() and BuildEncapsulationPacket() methods
+    //
+    // These methods are no longer needed because:
+    // 1. They created double-encapsulation (this class added encapsulation, then
+    //    ConfigurationWriteService added it again)
+    // 2. They hardcoded Session Handle to 0x00000000, violating ODVA spec for TCP
+    //    (Session Handle must come from RegisterSession response)
+    // 3. ConfigurationWriteService.BuildSendRRDataPacket() now handles all encapsulation
+    //    and CPF structure with proper session handle
+    //
+    // Per ODVA Volume 2 Section 2-4:
+    // - Encapsulation layer (SendRRData) is separate from CIP layer (Unconnected Send)
+    // - Session handle is part of encapsulation, not CIP
+    // - This class now returns CIP payloads only; caller handles encapsulation
 
     /// <summary>
     /// Parse response to extract CIP status code
     /// Returns status code byte from Set_Attribute_Single reply
+    ///
+    /// OBSOLETE: This method is no longer used. ConfigurationWriteService now handles
+    /// all response parsing with ParseAttributeResponse() and ParseCIPResponse() methods,
+    /// which provide better error handling and detailed result objects.
+    ///
+    /// Kept for backward compatibility only.
     /// </summary>
+    [Obsolete("Use ConfigurationWriteService.ParseAttributeResponse() instead. This method uses heuristic parsing and is less reliable.")]
     public static byte ParseResponseStatus(byte[] response)
     {
         if (response == null || response.Length < 24)
