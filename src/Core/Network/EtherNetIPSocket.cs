@@ -5,7 +5,7 @@ namespace EtherNetIPTool.Core.Network;
 
 /// <summary>
 /// UDP socket wrapper for EtherNet/IP broadcast communication
-/// Implements standard EtherNet/IP discovery using port 2222 source binding per REQ-4.1.1-001
+/// Uses OS-assigned ephemeral source port for ODVA-compliant device discovery
 /// Handles sending List Identity broadcasts and receiving responses
 /// REQ-3.3.1-001, REQ-3.3.1-003, REQ-4.3.3, REQ-4.3.4
 /// </summary>
@@ -16,9 +16,11 @@ public class EtherNetIPSocket : IDisposable
     private bool _disposed;
 
     /// <summary>
-    /// Standard EtherNet/IP source port for List Identity broadcasts (0x08AE)
-    /// Following industrial Ethernet best practices for reliable device discovery
+    /// Legacy EtherNet/IP source port (0x08AE) - no longer used
+    /// Modern ODVA-compliant implementations use ephemeral source ports
+    /// Port 2222 is reserved for UDP implicit I/O messaging (Class 1 connections)
     /// </summary>
+    [Obsolete("Source port is now OS-assigned for ODVA compliance. Use LocalPort property to get actual bound port.")]
     public const int EtherNetIPSourcePort = 2222;
 
     /// <summary>
@@ -53,13 +55,18 @@ public class EtherNetIPSocket : IDisposable
     /// <summary>
     /// Open UDP socket for broadcast communication
     ///
-    /// Per REQ-4.1.1-001: Binds to standard EtherNet/IP source port 2222 (0x08AE).
-    /// This follows industrial Ethernet best practices for reliable device discovery,
-    /// matching the proven pycomm3 implementation approach.
+    /// Per ODVA EtherNet/IP specification: Uses OS-assigned ephemeral source port for
+    /// List Identity broadcasts. Destination port is standard 44818 (0xAF12).
+    ///
+    /// ODVA Compliance Notes:
+    /// - Source port 0 allows OS to assign any available ephemeral port
+    /// - This prevents "Address already in use" errors when multiple instances run
+    /// - Port 2222 is reserved for UDP implicit I/O (Class 1 connections), not discovery
+    /// - Standard practice for UDP client applications per RFC 6056
     ///
     /// Socket options:
     /// - SO_BROADCAST: Enables broadcast packet transmission
-    /// - SO_REUSEADDR: Allows multiple applications to bind to same port
+    /// - SO_REUSEADDR: Allows multiple applications to coexist
     /// - ReceiveBuffer: Minimum 4096 bytes for complete encapsulation packets
     ///
     /// Socket is bound to specific network adapter to ensure broadcasts
@@ -73,13 +80,13 @@ public class EtherNetIPSocket : IDisposable
 
         try
         {
-            // REQ-4.1.1-001: Bind to standard EtherNet/IP source port 2222
-            var sourceEndPoint = new IPEndPoint(_localIP, EtherNetIPSourcePort);
+            // ODVA Compliance: Bind to ephemeral source port (OS-assigned)
+            var sourceEndPoint = new IPEndPoint(_localIP, 0);
 
             // Create socket with explicit options for industrial Ethernet compatibility
             var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
-            // Set SO_REUSEADDR to allow multiple applications to use port 2222
+            // Set SO_REUSEADDR to allow multiple applications to coexist on same network
             socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
             // Set SO_BROADCAST to enable broadcast packet transmission
@@ -88,7 +95,7 @@ public class EtherNetIPSocket : IDisposable
             // Set receive buffer size to ensure complete encapsulation packets can be received
             socket.ReceiveBufferSize = Math.Max(socket.ReceiveBufferSize, MinimumReceiveBufferSize);
 
-            // Bind to specific network adapter and port
+            // Bind to specific network adapter with OS-assigned ephemeral port
             socket.Bind(sourceEndPoint);
 
             // Set timeouts
@@ -99,18 +106,21 @@ public class EtherNetIPSocket : IDisposable
             _udpClient = new UdpClient();
             _udpClient.Client = socket;
 
-            // Verify socket was bound successfully
+            // Verify socket was bound successfully and get OS-assigned port
             var boundEndPoint = socket.LocalEndPoint as IPEndPoint;
-            if (boundEndPoint == null || boundEndPoint.Port != EtherNetIPSourcePort)
+            if (boundEndPoint == null)
             {
                 throw new SocketException((int)SocketError.AddressNotAvailable,
-                    $"Failed to bind socket to port {EtherNetIPSourcePort}");
+                    "Failed to bind socket to local endpoint");
             }
+
+            // Log the actual port assigned by OS for diagnostics
+            // This will be an ephemeral port in the range 49152-65535 (typically)
         }
         catch (SocketException ex)
         {
             throw new SocketException((int)ex.SocketErrorCode,
-                $"Failed to create UDP socket on {_localIP}:{EtherNetIPSourcePort}: {ex.Message}");
+                $"Failed to create UDP socket on {_localIP}: {ex.Message}");
         }
     }
 
