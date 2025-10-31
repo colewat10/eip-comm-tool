@@ -29,6 +29,10 @@ public class ConfigurationWriteService
     // Static counter for Sender Context uniqueness
     private static long _contextCounter = 0;
 
+    // Store last Sender Context for response validation (ODVA compliance)
+    // Per ODVA Volume 2 Section 2-3.2: Sender Context must be echoed in responses
+    private byte[] _lastSenderContext = new byte[8];
+
     /// <summary>
     /// Progress callback for updating UI (REQ-3.5.5-006)
     /// Parameters: (current step, total steps, operation name)
@@ -323,6 +327,10 @@ public class ConfigurationWriteService
 
         // Bytes 12-19: Sender Context (8 bytes, unique identifier)
         var senderContext = GetSenderContext();
+
+        // Store for response validation (ODVA compliance)
+        Array.Copy(senderContext, _lastSenderContext, 8);
+
         senderContext.CopyTo(request, offset);
         offset += 8;
 
@@ -355,6 +363,13 @@ public class ConfigurationWriteService
         }
 
         _logger.LogCIP($"RegisterSession response: {BitConverter.ToString(response)}");
+
+        // ODVA Compliance: Validate Sender Context
+        if (!ValidateSenderContext(response, _lastSenderContext))
+        {
+            _logger.LogWarning("RegisterSession response has mismatched Sender Context");
+            // Continue - some devices may not echo correctly
+        }
 
         // Parse response
         ushort responseCommand = BitConverter.ToUInt16(response, 0);
@@ -408,6 +423,10 @@ public class ConfigurationWriteService
 
         // Bytes 12-19: Sender Context (8 bytes)
         var senderContext = GetSenderContext();
+
+        // Store for completeness (though no response expected for UnregisterSession)
+        Array.Copy(senderContext, _lastSenderContext, 8);
+
         senderContext.CopyTo(request, offset);
         offset += 8;
 
@@ -521,6 +540,11 @@ public class ConfigurationWriteService
 
         // Bytes 12-19: Sender Context (unique per request)
         var senderContext = GetSenderContext();
+
+        // Store for response validation (ODVA compliance)
+        // Per ODVA Volume 2 Section 2-3.2: Response must echo this context
+        Array.Copy(senderContext, _lastSenderContext, 8);
+
         senderContext.CopyTo(packet, offset);
         offset += 8;
 
@@ -590,6 +614,15 @@ public class ConfigurationWriteService
         ushort payloadLength = BitConverter.ToUInt16(response, 2);
         uint responseSessionHandle = BitConverter.ToUInt32(response, 4);
         uint encapsulationStatus = BitConverter.ToUInt32(response, 8);
+
+        // ODVA Compliance: Validate Sender Context matches request
+        // Per ODVA Volume 2 Section 2-3.2: Response must echo Sender Context
+        if (!ValidateSenderContext(response, _lastSenderContext))
+        {
+            _logger.LogWarning($"Sender Context validation failed for {attributeName} write");
+            // Continue processing - mismatch is logged but not fatal
+            // Most devices echo context correctly, but some may not
+        }
 
         if (responseCommand != CMD_SendRRData)
         {
@@ -834,6 +867,73 @@ public class ConfigurationWriteService
         byte[] context = new byte[8];
         BitConverter.GetBytes(contextValue).CopyTo(context, 0);
         return context;
+    }
+
+    /// <summary>
+    /// Validate that response Sender Context matches request
+    /// Per ODVA Volume 2 Section 2-3.2: Target must echo Sender Context in response
+    ///
+    /// ODVA Specification Requirement:
+    /// "The Sender Context is an 8-byte array that is echoed back in the response.
+    ///  It is used by the originator to match responses to requests."
+    ///
+    /// This validation ensures the response corresponds to our request and
+    /// helps detect issues like:
+    /// - Response/request mismatch (e.g., slow network causing out-of-order responses)
+    /// - Device firmware bugs (not echoing context correctly)
+    /// - Man-in-the-middle attacks (context would differ)
+    /// </summary>
+    /// <param name="response">Response packet from device</param>
+    /// <param name="expectedContext">Expected Sender Context (from request)</param>
+    /// <returns>True if context matches, false otherwise</returns>
+    private bool ValidateSenderContext(byte[] response, byte[] expectedContext)
+    {
+        // Sender Context is at bytes 12-19 in encapsulation header
+        const int contextOffset = 12;
+        const int contextLength = 8;
+
+        // Validate response is long enough
+        if (response == null || response.Length < contextOffset + contextLength)
+        {
+            _logger.LogWarning($"Response too short to validate Sender Context ({response?.Length ?? 0} bytes)");
+            return false;
+        }
+
+        // Validate expected context
+        if (expectedContext == null || expectedContext.Length != contextLength)
+        {
+            _logger.LogWarning($"Invalid expected Sender Context (length: {expectedContext?.Length ?? 0})");
+            return false;
+        }
+
+        // Compare all 8 bytes
+        bool matches = true;
+        for (int i = 0; i < contextLength; i++)
+        {
+            if (response[contextOffset + i] != expectedContext[i])
+            {
+                matches = false;
+                break;
+            }
+        }
+
+        if (!matches)
+        {
+            // Log mismatch with hex dump for diagnostics
+            string expectedHex = BitConverter.ToString(expectedContext);
+            string receivedHex = BitConverter.ToString(response, contextOffset, contextLength);
+
+            _logger.LogWarning($"Sender Context MISMATCH detected!");
+            _logger.LogWarning($"  Expected: {expectedHex}");
+            _logger.LogWarning($"  Received: {receivedHex}");
+            _logger.LogWarning($"  This may indicate out-of-order responses or device firmware issue");
+
+            return false;
+        }
+
+        // Context matches - expected behavior
+        _logger.LogCIP($"Sender Context validated successfully: {BitConverter.ToString(expectedContext)}");
+        return true;
     }
 
     /// <summary>
