@@ -121,6 +121,7 @@ public class PortStatisticsViewModel : ViewModelBase, IDisposable
     public string MulticastIn => CurrentStats?.MulticastIn.ToString("N0") ?? "0";
     public string MulticastOut => CurrentStats?.MulticastOut.ToString("N0") ?? "0";
     public string LastUpdated => CurrentStats?.LastUpdated.ToString("HH:mm:ss") ?? "Never";
+    public string DataSource => CurrentStats?.DataSource ?? "Unknown";
 
     // === Detailed Error Properties (Attribute 12) ===
 
@@ -196,6 +197,7 @@ public class PortStatisticsViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(MulticastIn));
                 OnPropertyChanged(nameof(MulticastOut));
                 OnPropertyChanged(nameof(LastUpdated));
+                OnPropertyChanged(nameof(DataSource));
 
                 // Notify detailed error properties
                 OnPropertyChanged(nameof(SupportsDetailedErrors));

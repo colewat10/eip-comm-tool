@@ -85,6 +85,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="30"/>
                                 <RowDefinition Height="30"/>
+                                <RowDefinition Height="30"/>
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Link Status:" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -98,6 +99,9 @@
 
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="Last Updated:" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding LastUpdated}" VerticalAlignment="Center" FontFamily="Consolas"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Data Source:" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DataSource}" VerticalAlignment="Center" FontFamily="Consolas" FontWeight="Bold" Foreground="#0066CC"/>
                         </Grid>
                     </StackPanel>
                 </Border>

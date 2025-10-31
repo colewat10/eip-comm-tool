@@ -417,6 +417,117 @@ public class ConfigurationWriteService
     }
 
     /// <summary>
+    /// Read all attributes of a CIP object instance via Get_Attribute_All (Service 0x01)
+    /// Used as a fallback when Get_Attribute_Single (0x0E) is not supported
+    /// </summary>
+    /// <param name="device">Target device</param>
+    /// <param name="classId">CIP Class ID (e.g., 0xF6 for Ethernet Link)</param>
+    /// <param name="instanceId">Instance ID (typically 1 for port 1)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>AttributeReadResult containing all attributes data</returns>
+    public async Task<AttributeReadResult> ReadAllAttributesAsync(
+        Device device,
+        byte classId,
+        byte instanceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (device == null)
+            throw new ArgumentNullException(nameof(device));
+
+        _logger.LogCIP($"Reading ALL attributes: Class 0x{classId:X2}, Instance {instanceId} from {device.IPAddressString}");
+
+        TcpClient? tcpClient = null;
+        NetworkStream? stream = null;
+        uint sessionHandle = 0;
+
+        try
+        {
+            // 1. Establish TCP connection
+            tcpClient = new TcpClient();
+
+            using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            connectCts.CancelAfter(MessageTimeout);
+
+            _logger.LogCIP($"Connecting to {device.IPAddress}:{EtherNetIPPort}");
+
+            try
+            {
+                await tcpClient.ConnectAsync(device.IPAddress, EtherNetIPPort, connectCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return AttributeReadResult.CreateFailure(classId, instanceId, 0xFF, 0xFF, "Connection timeout");
+            }
+            catch (SocketException ex)
+            {
+                return AttributeReadResult.CreateFailure(classId, instanceId, 0xFF, 0xFF, $"Connection failed: {ex.Message}");
+            }
+
+            stream = tcpClient.GetStream();
+            stream.ReadTimeout = MessageTimeout;
+            stream.WriteTimeout = MessageTimeout;
+
+            // 2. RegisterSession
+            sessionHandle = await RegisterSessionAsync(stream, cancellationToken);
+            _logger.LogCIP($"Session registered: Handle = 0x{sessionHandle:X8}");
+
+            // 3. Build Get_Attribute_All request
+            byte[] cipMessage;
+            if (classId == 0xF6)
+            {
+                cipMessage = GetAttributeSingleMessage.BuildGetEthernetLinkAllAttributesRequest(instanceId, device.IPAddress);
+            }
+            else
+            {
+                return AttributeReadResult.CreateFailure(classId, instanceId, 0xFF, 0xFF, $"Get_Attribute_All not implemented for class 0x{classId:X2}");
+            }
+
+            // 4. Wrap in SendRRData and send
+            var sendRRDataPacket = BuildSendRRDataPacket(sessionHandle, cipMessage);
+            _logger.LogCIP($"Sending Get_Attribute_All request ({sendRRDataPacket.Length} bytes)");
+
+            await stream.WriteAsync(sendRRDataPacket, cancellationToken);
+            await stream.FlushAsync(cancellationToken);
+
+            // 5. Read response
+            var response = await ReadCompleteResponseAsync(stream, cancellationToken);
+            _logger.LogCIP($"Received response ({response.Length} bytes)");
+
+            // 6. Parse response (use same parser, reply code is 0x81 instead of 0x8E)
+            var result = ParseAttributeReadResponse(response, sessionHandle, classId, instanceId, 0xFF); // 0xFF = All attributes
+
+            // 7. UnregisterSession
+            await UnregisterSessionAsync(stream, sessionHandle, cancellationToken);
+
+            return result;
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogError($"Get_Attribute_All timeout after {MessageTimeout}ms");
+            return AttributeReadResult.CreateFailure(classId, instanceId, 0xFF, 0xFF, "Timeout");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Get_Attribute_All failed: {ex.Message}", ex);
+            return AttributeReadResult.CreateFailure(classId, instanceId, 0xFF, 0xFF, ex.Message);
+        }
+        finally
+        {
+            // Cleanup
+            if (stream != null && sessionHandle != 0)
+            {
+                try
+                {
+                    await UnregisterSessionAsync(stream, sessionHandle, cancellationToken);
+                }
+                catch { /* Already logged or non-critical */ }
+            }
+            stream?.Close();
+            tcpClient?.Close();
+        }
+    }
+
+    /// <summary>
     /// Parse Get_Attribute_Single response and extract attribute data
     /// Similar to ParseAttributeResponse but for read operations (Service 0x8E reply)
     /// </summary>
@@ -523,7 +634,11 @@ public class ConfigurationWriteService
                 byte embeddedStatus = response[embeddedOffset + 2];
                 byte embeddedAdditionalStatusSize = response[embeddedOffset + 3];
 
-                if (embeddedServiceReply != 0x8E && embeddedServiceReply != 0xCE) // Get_Attribute_Single Reply
+                // Valid service replies:
+                // 0x81/0xC1 = Get_Attribute_All Reply (success/error)
+                // 0x8E/0xCE = Get_Attribute_Single Reply (success/error)
+                if (embeddedServiceReply != 0x81 && embeddedServiceReply != 0xC1 &&
+                    embeddedServiceReply != 0x8E && embeddedServiceReply != 0xCE)
                 {
                     return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, 0xFF,
                         $"Invalid embedded service reply: 0x{embeddedServiceReply:X2}");
@@ -532,7 +647,8 @@ public class ConfigurationWriteService
                 if (embeddedStatus != 0x00)
                 {
                     string statusMessage = CIPStatusCodes.GetStatusMessage(embeddedStatus);
-                    _logger.LogWarning($"Get_Attribute_Single failed: {statusMessage} (Status: 0x{embeddedStatus:X2})");
+                    string serviceName = (embeddedServiceReply == 0x81 || embeddedServiceReply == 0xC1) ? "Get_Attribute_All" : "Get_Attribute_Single";
+                    _logger.LogWarning($"{serviceName} failed: {statusMessage} (Status: 0x{embeddedStatus:X2})");
                     return AttributeReadResult.CreateFailure(classId, instanceId, attributeId, embeddedStatus, statusMessage);
                 }
 

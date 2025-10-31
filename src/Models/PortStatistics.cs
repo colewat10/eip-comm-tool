@@ -18,6 +18,9 @@ public class PortStatistics
     public int PortNumber { get; set; } = 1;
     public DateTime LastUpdated { get; set; }
 
+    /// <summary>Data source: "CIP" or "SNMP"</summary>
+    public string DataSource { get; set; } = "CIP";
+
     // === ETHERNET LINK OBJECT (Class 0xF6) - ATTRIBUTE 4: INTERFACE SPEED ===
     /// <summary>Interface Speed (Attr 4) - Mbps (10, 100, 1000, 10000)</summary>
     public uint InterfaceSpeed { get; set; }

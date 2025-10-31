@@ -22,6 +22,7 @@ public static class GetAttributeSingleMessage
 {
     // CIP Service codes
     private const byte ServiceGetAttributeSingle = 0x0E;
+    private const byte ServiceGetAttributeAll = 0x01;
     private const byte ServiceUnconnectedSend = 0x52;
 
     // CIP Class/Instance constants
@@ -158,6 +159,50 @@ public static class GetAttributeSingleMessage
         writer.Write((byte)0x00);  // Padding
         writer.Write((byte)0x01);  // Port 1 (backplane)
         writer.Write((byte)0x00);  // Address 0
+
+        return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Build Get_Attribute_All request for Ethernet Link Object (Class 0xF6)
+    /// Some devices (like Turck) don't support Get_Attribute_Single but do support Get_Attribute_All
+    /// This reads ALL attributes of the object instance at once
+    /// </summary>
+    /// <param name="instanceId">Instance ID (typically 1 for port 1)</param>
+    /// <param name="targetDeviceIP">Target device IP address</param>
+    /// <returns>Unconnected Send CIP payload (without encapsulation)</returns>
+    public static byte[] BuildGetEthernetLinkAllAttributesRequest(byte instanceId, IPAddress targetDeviceIP)
+    {
+        // Build embedded Get_Attribute_All message (Service 0x01)
+        byte[] embeddedMessage = BuildEmbeddedGetAllAttributesMessage(ClassEthernetLink, instanceId);
+
+        // Wrap in Unconnected Send
+        return BuildUnconnectedSendData(embeddedMessage, targetDeviceIP);
+    }
+
+    /// <summary>
+    /// Build embedded Get_Attribute_All message (Service 0x01)
+    /// Simpler than Get_Attribute_Single - no attribute ID needed
+    /// </summary>
+    private static byte[] BuildEmbeddedGetAllAttributesMessage(byte classId, byte instanceId)
+    {
+        using var ms = new MemoryStream();
+        using var writer = new BinaryWriter(ms);
+
+        // Service: Get_Attribute_All (0x01)
+        writer.Write(ServiceGetAttributeAll);
+
+        // Request Path Size (in words): 2 words = 4 bytes
+        // Path: Class, Instance (NO Attribute needed for Get_Attribute_All)
+        writer.Write((byte)2);
+
+        // Path Segment 1: Class
+        writer.Write((byte)0x20);  // 8-bit class
+        writer.Write(classId);
+
+        // Path Segment 2: Instance
+        writer.Write((byte)0x24);  // 8-bit instance
+        writer.Write(instanceId);
 
         return ms.ToArray();
     }

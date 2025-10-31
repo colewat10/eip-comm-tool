@@ -14,6 +14,7 @@ public class PortStatisticsService
 {
     private readonly ActivityLogger _logger;
     private readonly ConfigurationWriteService _cipService;
+    private readonly SnmpPortStatisticsService _snmpService;
 
     // Ethernet Link Object (Class 0xF6) Attribute IDs
     private const byte ATTR_INTERFACE_SPEED = 4;
@@ -27,6 +28,7 @@ public class PortStatisticsService
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _cipService = new ConfigurationWriteService(logger);
+        _snmpService = new SnmpPortStatisticsService(logger);
     }
 
     /// <summary>
@@ -45,13 +47,15 @@ public class PortStatisticsService
         try
         {
             _logger.LogInfo($"Reading port statistics for {device.ProductName} ({device.IPAddressString}), Port {portInstance}");
+            _logger.LogInfo($"Device: Turck TBIP-L4-FDio1-2IOL - Attempting CIP Ethernet Link Object (Class 0xF6) read...");
 
             var stats = new PortStatistics
             {
                 DeviceName = device.ProductName,
                 DeviceIP = device.IPAddressString,
                 PortNumber = portInstance,
-                LastUpdated = DateTime.Now
+                LastUpdated = DateTime.Now,
+                DataSource = "CIP"
             };
 
             // === Read Attribute 4: Interface Speed ===
@@ -84,8 +88,22 @@ public class PortStatisticsService
 
             // === Read Attribute 6: Media Counters (CRITICAL - Main traffic stats) ===
             // This is an array of 11 DINTs (44 bytes total)
+            // Try Get_Attribute_Single first
             var countersResult = await _cipService.ReadAttributeAsync(
                 device, 0xF6, (byte)portInstance, ATTR_MEDIA_COUNTERS, cancellationToken);
+
+            // If Get_Attribute_Single not supported (Status 0x08), try Get_Attribute_All
+            if (!countersResult.Success && countersResult.StatusCode == 0x08)
+            {
+                _logger.LogWarning("⚠️ Get_Attribute_Single not supported (Status 0x08 - Service not supported)");
+                _logger.LogInfo("📋 Trying Get_Attribute_All (Service 0x01) as fallback...");
+                countersResult = await _cipService.ReadAllAttributesAsync(device, 0xF6, (byte)portInstance, cancellationToken);
+
+                if (!countersResult.Success)
+                {
+                    _logger.LogError($"❌ Get_Attribute_All ALSO failed with Status 0x{countersResult.StatusCode:X2}");
+                }
+            }
 
             if (countersResult.Success && countersResult.Data != null && countersResult.Data.Length >= 44)
             {
@@ -101,9 +119,26 @@ public class PortStatisticsService
             }
             else
             {
-                _logger.LogError($"Failed to read Media Counters (Attr 6): {countersResult.ErrorMessage}");
-                // This is critical - without Media Counters, port stats are not useful
-                return null;
+                _logger.LogError($"❌ FAILED to read Media Counters (Attr 6)");
+                _logger.LogError($"   Status Code: 0x{countersResult.StatusCode:X2}");
+                _logger.LogError($"   Error: {countersResult.ErrorMessage}");
+                _logger.LogWarning($"⚠️ CIP Ethernet Link Object (Class 0xF6) not supported by this device");
+                _logger.LogInfo($"📡 Attempting SNMP fallback (RFC 1213 MIB-II + RFC 2665 EtherLike-MIB)...");
+
+                // Try SNMP as fallback
+                var snmpStats = await _snmpService.ReadPortStatisticsAsync(device, portInstance, cancellationToken);
+                if (snmpStats != null)
+                {
+                    snmpStats.DataSource = "SNMP";
+                    _logger.LogInfo($"✅ Successfully retrieved port statistics via SNMP");
+                    return snmpStats;
+                }
+                else
+                {
+                    _logger.LogError($"❌ SNMP also failed - device does not support CIP Ethernet Link Object or SNMP");
+                    _logger.LogError($"   No method available to read port statistics from this device");
+                    return null;
+                }
             }
 
             // === Read Attribute 8: Interface Type (optional) ===
